@@ -15,3 +15,11 @@ class Vehicle(models.Model):
     fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     def __str__(self):
         return f"{self.license_plate} - {self.status}"
+
+
+#database table to track system defects (like broken barriers or jammed ticket printers)
+class Defect(models.Model):
+    defect_type = models.CharField(max_length=100)
+    frequency = models.IntegerField(default=0)
+    def __str__(self):
+        return f"{self.defect_type} ({self.frequency})"
