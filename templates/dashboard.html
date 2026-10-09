@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">Active Vehicles Dashboard</h2>
+        
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <p class="text-muted">Currently parked vehicles will be listed below.</p>
+                
+                <!-- We will inject the database table here in the next step -->
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mt-3">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>License Plate</th>
+                                <th>Vehicle Type</th>
+                                <th>Entry Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" class="text-center">No vehicles found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
