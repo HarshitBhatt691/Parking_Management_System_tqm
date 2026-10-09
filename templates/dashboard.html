@@ -21,9 +21,18 @@
                             </tr>
                         </thead>
                         <tbody>
+                            {% for vehicle in vehicles %}
                             <tr>
-                                <td colspan="4" class="text-center">No vehicles found.</td>
+                                <td><strong>{{ vehicle.license_plate }}</strong></td>
+                                <td>{{ vehicle.vehicle_type }}</td>
+                                <td>{{ vehicle.entry_time|date:"M d, Y H:i" }}</td>
+                                <td><span class="badge bg-success">{{ vehicle.status }}</span></td>
                             </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No active vehicles currently parked.</td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
