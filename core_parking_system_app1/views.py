@@ -1,4 +1,5 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from .models import Vehicle
 from .forms import VehicleForm
 
@@ -15,3 +16,11 @@ def add_vehicle(request):
     else:
         form = VehicleForm()
     return render(request, 'add_vehicle.html', {'form': form})
+
+
+def exit_vehicle(request, vehicle_id):
+    vehicle = get_object_or_404(Vehicle, id=vehicle_id, status='Parked')
+    fee = vehicle.calculate_fee()
+    vehicle.save()
+    messages.success(request, f"Vehicle {vehicle.license_plate} checked out! Total Fee: ₹{fee:.2f}")
+    return redirect('dashboard')
