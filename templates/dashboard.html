@@ -1,43 +1,123 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
-        <h2 class="mb-4">Active Vehicles Dashboard</h2>
-        
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <p class="text-muted">Currently parked vehicles will be listed below.</p>
-                
-                <!-- We will inject the database table here in the next step -->
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover mt-3">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>License Plate</th>
-                                <th>Vehicle Type</th>
-                                <th>Entry Time</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for vehicle in vehicles %}
-                            <tr>
-                                <td><strong>{{ vehicle.license_plate }}</strong></td>
-                                <td>{{ vehicle.vehicle_type }}</td>
-                                <td>{{ vehicle.entry_time|date:"M d, Y H:i" }}</td>
-                                <td><span class="badge bg-success">{{ vehicle.status }}</span></td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center text-muted">No active vehicles currently parked.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+<!-- Alert Messages -->
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
 
+<!-- Header and Quick Action -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0 fw-bold">Live Parking Dashboard</h2>
+        <small class="text-muted">Real-time occupancy and turnover management</small>
+    </div>
+    <a href="{% url 'add_vehicle' %}" class="btn btn-primary shadow-sm">
+        + Park New Vehicle
+    </a>
+</div>
+
+<!-- Interactive Metrics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 bg-primary text-white">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase mb-2 opacity-75">Total Capacity</h6>
+                <h3 class="fw-bold mb-0">{{ total_capacity }} Spots</h3>
             </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 bg-warning text-dark">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase mb-2 opacity-75">Occupied Spots</h6>
+                <h3 class="fw-bold mb-0">{{ occupied_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase mb-2 opacity-75">Available Spots</h6>
+                <h3 class="fw-bold mb-0">{{ available_spots }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 bg-info text-white">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase mb-2 opacity-75">Total Revenue</h6>
+                <h3 class="fw-bold mb-0">₹{{ total_revenue|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Occupancy Progress Bar -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+            <span class="fw-bold">Space Utilization Meter</span>
+            <span class="fw-bold">{{ occupancy_pct }}% Occupied</span>
+        </div>
+        <div class="progress" style="height: 18px;">
+            <div class="progress-bar {% if occupancy_pct > 80 %}bg-danger{% elif occupancy_pct > 50 %}bg-warning{% else %}bg-success{% endif %}" 
+                 role="progressbar" 
+                 style="width: {{ occupancy_pct }}%;" 
+                 aria-valuenow="{{ occupancy_pct }}" 
+                 aria-valuemin="0" 
+                 aria-valuemax="100">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Vehicles Table -->
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold">Currently Parked Vehicles</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">License Plate</th>
+                        <th>Type</th>
+                        <th>Check-in Time</th>
+                        <th>Status</th>
+                        <th class="text-end pe-3">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vehicle in vehicles %}
+                    <tr>
+                        <td class="ps-3 fw-bold text-primary">{{ vehicle.license_plate }}</td>
+                        <td>{{ vehicle.vehicle_type }}</td>
+                        <td>{{ vehicle.entry_time|date:"M d, Y - h:i A" }}</td>
+                        <td><span class="badge bg-success">Parked</span></td>
+                        <td class="text-end pe-3">
+                            <a href="{% url 'exit_vehicle' vehicle.id %}" 
+                               class="btn btn-sm btn-outline-danger"
+                               onclick="return confirm('Confirm check out for {{ vehicle.license_plate }}?');">
+                                Checkout & Bill
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            No vehicles currently parked. All spots are open!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

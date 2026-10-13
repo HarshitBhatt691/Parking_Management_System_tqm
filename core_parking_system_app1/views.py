@@ -1,11 +1,25 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.db.models import Sum
 from .models import Vehicle
 from .forms import VehicleForm
 
 def dashboard(request):
+    total_capacity = 50  # Default maximum lot capacity
     active_vehicles = Vehicle.objects.filter(status='Parked').order_by('-entry_time')
-    return render(request, 'dashboard.html', {'vehicles': active_vehicles})
+    occupied_count = active_vehicles.count()
+    available_spots = max(0, total_capacity - occupied_count)
+    occupancy_pct = int((occupied_count / total_capacity) * 100) if total_capacity else 0
+    total_revenue = Vehicle.objects.filter(status='Exited').aggregate(Sum('fee'))['fee__sum'] or 0.00
+    context = {
+        'vehicles': active_vehicles,
+        'total_capacity': total_capacity,
+        'occupied_count': occupied_count,
+        'available_spots': available_spots,
+        'occupancy_pct': occupancy_pct,
+        'total_revenue': total_revenue,
+    }
+    return render(request, 'dashboard.html', context)
 
 def add_vehicle(request):
     if request.method == 'POST':
@@ -15,7 +29,7 @@ def add_vehicle(request):
             return redirect('dashboard')
     else:
         form = VehicleForm()
-    return render(request, 'add_vehicle.html', {'form': form})
+    return render(request, 'adding_vehicles.html', {'form': form})
 
 
 def exit_vehicle(request, vehicle_id):
