@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TQM Parking Management System</title>
-    <!-- Bootstrap 5 CSS -->
+    <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .kbd-key {
@@ -17,9 +17,14 @@
             font-weight: 700;
             padding: 2px 6px;
         }
+        [data-bs-theme="dark"] .kbd-key {
+            background-color: #333;
+            border-color: #555;
+            color: #eee;
+        }
     </style>
 </head>
-<body class="bg-light" id="app-body">
+<body id="app-body">
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
         <div class="container">
@@ -37,6 +42,11 @@
                     </li>
                 </ul>
                 <div class="d-flex align-items-center gap-2">
+                    <!-- Theme Toggle Button -->
+                    <button class="btn btn-outline-warning btn-sm" id="themeToggleBtn" title="Toggle Theme (Alt+T)">
+                        🌙 Dark Mode
+                    </button>
+                    <!-- Shortcuts Cheat Sheet Button -->
                     <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#shortcutsModal" title="Shortcuts (Alt+H)">
                         ⌨️ Shortcuts
                     </button>
@@ -77,6 +87,10 @@
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">D</span></td>
                             </tr>
                             <tr>
+                                <td>Toggle Dark/Light Mode</td>
+                                <td><span class="kbd-key">Alt</span> + <span class="kbd-key">T</span></td>
+                            </tr>
+                            <tr>
                                 <td>Show Shortcuts Help</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">H</span> or <span class="kbd-key">?</span></td>
                             </tr>
@@ -90,24 +104,49 @@
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Global Keyboard Shortcuts Script -->
+    <!-- Theme & Shortcuts Logic -->
     <script>
+        // Persistent Theme Toggle
+        const htmlElement = document.documentElement;
+        const themeBtn = document.getElementById('themeToggleBtn');
+
+        function applyTheme(theme) {
+            htmlElement.setAttribute('data-bs-theme', theme);
+            localStorage.setItem('parksmart_theme', theme);
+            if (theme === 'dark') {
+                themeBtn.innerHTML = 'Light Mode';
+                themeBtn.classList.replace('btn-outline-warning', 'btn-outline-light');
+            } else {
+                themeBtn.innerHTML = 'Dark Mode';
+                themeBtn.classList.replace('btn-outline-light', 'btn-outline-warning');
+            }
+        }
+
+        // Load saved theme or default to light
+        const savedTheme = localStorage.getItem('parksmart_theme') || 'light';
+        applyTheme(savedTheme);
+
+        function toggleTheme() {
+            const currentTheme = htmlElement.getAttribute('data-bs-theme');
+            applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+        }
+
+        themeBtn.addEventListener('click', toggleTheme);
+
+        // Global Keyboard Shortcuts
         document.addEventListener('keydown', function(e) {
-            // Check if user is typing inside an input field
             const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
 
-            // Alt + N: Navigate to Add Vehicle
             if (e.altKey && (e.key === 'n' || e.key === 'N')) {
                 e.preventDefault();
                 window.location.href = "{% url 'add_vehicle' %}";
-            }
-            // Alt + D: Navigate to Dashboard
-            else if (e.altKey && (e.key === 'd' || e.key === 'D')) {
+            } else if (e.altKey && (e.key === 'd' || e.key === 'D')) {
                 e.preventDefault();
                 window.location.href = "{% url 'dashboard' %}";
-            }
-            // Alt + H or ?: Open Shortcuts modal
-            else if ((e.altKey && (e.key === 'h' || e.key === 'H')) || (!isTyping && e.key === '?')) {
+            } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
+                e.preventDefault();
+                toggleTheme();
+            } else if ((e.altKey && (e.key === 'h' || e.key === 'H')) || (!isTyping && e.key === '?')) {
                 e.preventDefault();
                 const modal = new bootstrap.Modal(document.getElementById('shortcutsModal'));
                 modal.show();
