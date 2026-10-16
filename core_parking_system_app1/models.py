@@ -35,3 +35,14 @@ class Defect(models.Model):
     frequency = models.IntegerField(default=0)
     def __str__(self):
         return f"{self.defect_type} ({self.frequency})"
+
+
+# Q08 Feature 5: User Profile & Facility Settings
+class ProfileSettings(models.Model):
+    operator_name = models.CharField(max_length=100, default="Harshit Bhatt (Operator)")
+    facility_name = models.CharField(max_length=150, default="Central Campus Parking Lot")
+    hourly_rate = models.DecimalField(max_digits=6, decimal_places=2, default=30.00)
+    total_capacity = models.IntegerField(default=50)
+    contact_email = models.EmailField(default="operator@parksmart.edu")
+    def __str__(self):
+        return f"Settings: {self.operator_name} - {self.facility_name}"
