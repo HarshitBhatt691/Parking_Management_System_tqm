@@ -3,10 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TQM Parking Management System</title>
+    <title>ParkSmart - TQM Parking Management System</title>
+    <!-- Google Font: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
     <style>
+        :root {
+            --app-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        body {
+            font-family: var(--app-font);
+            background-color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        [data-bs-theme="dark"] body {
+            background-color: #0f172a;
+        }
+        .navbar-custom {
+            backdrop-filter: blur(12px);
+            background: rgba(15, 23, 42, 0.95) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .card-custom {
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 1rem;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        [data-bs-theme="dark"] .card-custom {
+            background-color: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.08);
+        }
+        .stat-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+        }
+        /* Visual Parking Bay Grid */
+        .parking-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+        .bay-card {
+            border-radius: 8px;
+            padding: 8px 4px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: 1.5px solid;
+            transition: all 0.2s ease;
+            cursor: default;
+        }
+        .bay-vacant {
+            background-color: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #16a34a;
+        }
+        .bay-occupied {
+            background-color: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #dc2626;
+            animation: pulse-soft 2s infinite ease-in-out;
+        }
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
         .kbd-key {
             background-color: #eee;
             border-radius: 4px;
@@ -22,39 +102,67 @@
             border-color: #555;
             color: #eee;
         }
+        .pulse-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+            animation: pulse-dot 1.5s infinite;
+        }
+        @keyframes pulse-dot {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
     </style>
 </head>
 <body id="app-body">
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">🅿️ ParkSmart TQM</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top py-2 mb-4">
+        <div class="container-fluid px-lg-5">
+            <a class="navbar-brand fw-extrabold d-flex align-items-center gap-2" href="{% url 'dashboard' %}">
+                <span class="fs-4">🅿️</span>
+                <span class="fw-bold fs-5 tracking-tight">ParkSmart <span class="badge bg-primary text-uppercase px-2 py-1 fs-8 fw-semibold">TQM</span></span>
+                <span class="d-none d-md-inline-flex align-items-center gap-1 ms-2 badge bg-dark border border-secondary text-light px-2 py-1 fw-normal">
+                    <span class="pulse-indicator"></span> Gate #1 Active
+                </span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navContent">
-                <ul class="navbar-nav me-auto">
+                <ul class="navbar-nav me-auto ms-lg-3 gap-1">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
+                        <a class="nav-link px-3 rounded-pill text-white" href="{% url 'dashboard' %}">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'add_vehicle' %}">Park Vehicle</a>
+                        <a class="nav-link px-3 rounded-pill" href="{% url 'add_vehicle' %}">
+                            <i class="bi bi-plus-circle me-1"></i> Park Vehicle
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'profile_settings' %}">Profile Settings</a>
+                        <a class="nav-link px-3 rounded-pill" href="{% url 'sqc_reports' %}">
+                            <i class="bi bi-bar-chart-line-fill me-1"></i> SQC Reports
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'sqc_reports' %}">SQC Reports</a>
+                        <a class="nav-link px-3 rounded-pill" href="{% url 'profile_settings' %}">
+                            <i class="bi bi-gear-fill me-1"></i> Facility Settings
+                        </a>
                     </li>
                 </ul>
                 <div class="d-flex align-items-center gap-2">
                     <!-- Theme Toggle Button -->
-                    <button class="btn btn-outline-warning btn-sm" id="themeToggleBtn" title="Toggle Theme (Alt+T)">
-                        🌙 Dark Mode
+                    <button class="btn btn-outline-warning btn-sm rounded-pill px-3 py-1" id="themeToggleBtn" title="Toggle Theme (Alt+T)">
+                        <i class="bi bi-moon-stars-fill me-1"></i> Dark Mode
                     </button>
                     <!-- Shortcuts Cheat Sheet Button -->
-                    <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#shortcutsModal" title="Shortcuts (Alt+H)">
-                        ⌨️ Shortcuts
+                    <button class="btn btn-outline-light btn-sm rounded-pill px-3 py-1" data-bs-toggle="modal" data-bs-target="#shortcutsModal" title="Shortcuts (Alt+H)">
+                        <i class="bi bi-keyboard me-1"></i> Hotkeys
                     </button>
                 </div>
             </div>
@@ -62,20 +170,33 @@
     </nav>
     
     <!-- Main Content Container -->
-    <div class="container mb-5">
+    <main class="container-fluid px-lg-5 mb-5 flex-grow-1">
         {% block content %}
         {% endblock %}
-    </div>
+    </main>
+
+    <!-- Sleek Footer -->
+    <footer class="footer mt-auto py-3 border-top bg-body-tertiary">
+        <div class="container-fluid px-lg-5 d-flex flex-wrap justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2 text-muted small">
+                <strong>BBAT104: Fundamentals of TQM</strong> &bull; Parking Management System [Q08: Improve User Satisfaction]
+            </div>
+            <div class="text-muted small">
+                Student: <strong>Harshit Bhatt</strong> (Roll: <code>2410302018</code>) &bull; CSE
+            </div>
+        </div>
+    </footer>
 
     <!-- Shortcuts Cheat Sheet Modal -->
     <div class="modal fade" id="shortcutsModal" tabindex="-1" aria-labelledby="shortcutsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="shortcutsModalLabel">⌨️ Keyboard Shortcuts</h5>
+            <div class="modal-content card-custom">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="shortcutsModalLabel"><i class="bi bi-keyboard text-primary me-2"></i>Keyboard Shortcuts</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <p class="text-muted small mb-3">Operator productivity hotkeys to minimize gate entry queues (TQM Q08 Usability):</p>
                     <table class="table table-bordered align-middle">
                         <thead class="table-light">
                             <tr>
@@ -85,19 +206,19 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Park New Vehicle</td>
+                                <td><i class="bi bi-plus-circle text-success me-2"></i>Park New Vehicle</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">N</span></td>
                             </tr>
                             <tr>
-                                <td>Go to Dashboard</td>
+                                <td><i class="bi bi-speedometer2 text-primary me-2"></i>Go to Dashboard</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">D</span></td>
                             </tr>
                             <tr>
-                                <td>Toggle Dark/Light Mode</td>
+                                <td><i class="bi bi-moon-stars text-warning me-2"></i>Toggle Dark/Light Mode</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">T</span></td>
                             </tr>
                             <tr>
-                                <td>Show Shortcuts Help</td>
+                                <td><i class="bi bi-question-circle text-info me-2"></i>Show Shortcuts Help</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">H</span> or <span class="kbd-key">?</span></td>
                             </tr>
                         </tbody>
@@ -112,7 +233,6 @@
 
     <!-- Theme & Shortcuts Logic -->
     <script>
-        // Persistent Theme Toggle
         const htmlElement = document.documentElement;
         const themeBtn = document.getElementById('themeToggleBtn');
 
@@ -120,15 +240,14 @@
             htmlElement.setAttribute('data-bs-theme', theme);
             localStorage.setItem('parksmart_theme', theme);
             if (theme === 'dark') {
-                themeBtn.innerHTML = 'Light Mode';
+                themeBtn.innerHTML = '<i class="bi bi-sun-fill me-1"></i> Light Mode';
                 themeBtn.classList.replace('btn-outline-warning', 'btn-outline-light');
             } else {
-                themeBtn.innerHTML = 'Dark Mode';
+                themeBtn.innerHTML = '<i class="bi bi-moon-stars-fill me-1"></i> Dark Mode';
                 themeBtn.classList.replace('btn-outline-light', 'btn-outline-warning');
             }
         }
 
-        // Load saved theme or default to light
         const savedTheme = localStorage.getItem('parksmart_theme') || 'light';
         applyTheme(savedTheme);
 

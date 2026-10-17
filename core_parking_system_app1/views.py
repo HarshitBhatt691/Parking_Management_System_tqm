@@ -1,21 +1,43 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from .models import Vehicle, ProfileSettings
 from .forms import VehicleForm, ProfileSettingsForm
 from . import sqc_tools
 
 def dashboard(request):
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
-    total_capacity = settings.total_capacity
+    total_capacity = settings.total_capacity or 50
     active_vehicles = Vehicle.objects.filter(status='Parked').order_by('-entry_time')
     occupied_count = active_vehicles.count()
     available_spots = max(0, total_capacity - occupied_count)
     occupancy_pct = int((occupied_count / total_capacity) * 100) if total_capacity else 0
     total_revenue = Vehicle.objects.filter(status='Exited').aggregate(Sum('fee'))['fee__sum'] or 0.00
 
+    # Recent exit turnover (shows recent activity even when active lot is quiet)
+    recent_exits = Vehicle.objects.filter(status='Exited').order_by('-exit_time')[:5]
+
+    # Generate visual 2D parking slots map (24 representative bays: P-01 to P-24)
+    active_list = list(active_vehicles)
+    display_bays = 24
+    slots = []
+    for i in range(display_bays):
+        is_occ = i < len(active_list)
+        veh = active_list[i] if is_occ else None
+        slots.append({
+            'code': f"P-{i+1:02d}",
+            'is_occupied': is_occ,
+            'vehicle': veh,
+        })
+
+    # Vehicle breakdown
+    type_counts = Vehicle.objects.filter(status='Parked').values('vehicle_type').annotate(count=Count('id'))
+
     context = {
         'vehicles': active_vehicles,
+        'recent_exits': recent_exits,
+        'slots': slots,
+        'type_counts': type_counts,
         'settings': settings,
         'total_capacity': total_capacity,
         'occupied_count': occupied_count,
