@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.db.models import Sum
 from .models import Vehicle, ProfileSettings
 from .forms import VehicleForm, ProfileSettingsForm
+from . import sqc_tools
 
 def dashboard(request):
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
@@ -54,3 +55,11 @@ def profile_settings(request):
     else:
         form = ProfileSettingsForm(instance=settings)
     return render(request, 'profile_settings.html', {'form': form, 'settings': settings})
+
+def sqc_reports(request):
+    pareto_img = sqc_tools.get_pareto_chart()
+    fishbone_img = sqc_tools.get_fishbone_diagram()
+    return render(request, 'sqc_reports.html', {
+        'pareto_chart': pareto_img,
+        'fishbone_chart': fishbone_img,
+    })

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0 fw-bold">📊 Statistical Quality Control (SQC) Reports</h2>
+        <small class="text-muted">TQM Visual Analytics: Pareto Analysis & Ishikawa Root Cause Defense</small>
+    </div>
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
+</div>
+
+<!-- Pareto Chart Section -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-primary">1. Pareto Analysis (80/20 Rule)</h5>
+    </div>
+    <div class="card-body text-center">
+        {% if pareto_chart %}
+            <img src="{{ pareto_chart }}" class="img-fluid rounded shadow-sm border" alt="Pareto Chart">
+            <p class="text-muted mt-3 mb-0 small">
+                <strong>TQM Insight:</strong> The chart isolates the vital 20% of causes (Barrier & Printer malfunctions) responsible for over 80% of parking queue delays.
+            </p>
+        {% else %}
+            <p class="text-muted">No defect records found to generate Pareto analysis.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Fishbone Diagram Section -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-danger">2. Ishikawa (Fishbone) Root Cause Diagram</h5>
+    </div>
+    <div class="card-body text-center">
+        {% if fishbone_chart %}
+            <img src="{{ fishbone_chart }}" class="img-fluid rounded shadow-sm border" alt="Fishbone Diagram">
+            <p class="text-muted mt-3 mb-0 small">
+                <strong>TQM Insight:</strong> Categorization of queue bottlenecks across People, Process, Software Code, and Infrastructure.
+            </p>
+        {% else %}
+            <p class="text-muted">Failed to generate Fishbone diagram.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
