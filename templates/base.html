@@ -145,13 +145,18 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link px-3 rounded-pill" href="{% url 'parking_history' %}">
+                            <i class="bi bi-clock-history me-1"></i> History & Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link px-3 rounded-pill" href="{% url 'sqc_reports' %}">
                             <i class="bi bi-bar-chart-line-fill me-1"></i> SQC Reports
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3 rounded-pill" href="{% url 'profile_settings' %}">
-                            <i class="bi bi-gear-fill me-1"></i> Facility Settings
+                            <i class="bi bi-gear-fill me-1"></i> Settings
                         </a>
                     </li>
                 </ul>
@@ -206,12 +211,16 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td><i class="bi bi-plus-circle text-success me-2"></i>Park New Vehicle</td>
+                                <td><i class="bi bi-plus-circle text-success me-2"></i>Park New Vehicle (Create)</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">N</span></td>
                             </tr>
                             <tr>
-                                <td><i class="bi bi-speedometer2 text-primary me-2"></i>Go to Dashboard</td>
+                                <td><i class="bi bi-speedometer2 text-primary me-2"></i>Go to Dashboard (Read)</td>
                                 <td><span class="kbd-key">Alt</span> + <span class="kbd-key">D</span></td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-clock-history text-secondary me-2"></i>View History & Logs</td>
+                                <td><span class="kbd-key">Alt</span> + <span class="kbd-key">Y</span></td>
                             </tr>
                             <tr>
                                 <td><i class="bi bi-moon-stars text-warning me-2"></i>Toggle Dark/Light Mode</td>
@@ -268,6 +277,9 @@
             } else if (e.altKey && (e.key === 'd' || e.key === 'D')) {
                 e.preventDefault();
                 window.location.href = "{% url 'dashboard' %}";
+            } else if (e.altKey && (e.key === 'y' || e.key === 'Y')) {
+                e.preventDefault();
+                window.location.href = "{% url 'parking_history' %}";
             } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
                 e.preventDefault();
                 toggleTheme();

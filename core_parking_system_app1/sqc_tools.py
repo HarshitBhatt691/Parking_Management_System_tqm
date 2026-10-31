@@ -5,6 +5,7 @@ matplotlib.use('Agg')  # Headless backend for web server
 import matplotlib.pyplot as plt
 from .models import Defect
 
+
 def get_pareto_chart():
     """Generates an 80/20 Pareto Chart from defect logs encoded as Base64."""
     defects = Defect.objects.all().order_by('-frequency')
@@ -28,6 +29,7 @@ def get_pareto_chart():
     bars = ax1.bar(categories, frequencies, color='#2b5c8f', width=0.55)
     ax1.set_ylabel('Defect Occurrence Count', color='#2b5c8f', fontweight='bold')
     ax1.tick_params(axis='y', labelcolor='#2b5c8f')
+    ax1.set_xticks(range(len(categories)))
     ax1.set_xticklabels(categories, rotation=25, ha='right')
 
     # Line chart for cumulative percentage
@@ -51,7 +53,6 @@ def get_pareto_chart():
 
     return f"data:image/png;base64,{image_base64}"
 
-# function to get the ishikawa fishbone diagram :
 
 def get_fishbone_diagram():
     """Generates an Ishikawa (Fishbone) Root-Cause Diagram encoded as Base64."""
