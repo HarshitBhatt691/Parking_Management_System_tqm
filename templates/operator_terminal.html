@@ -1,0 +1,455 @@
+{% extends 'base.html' %}
+
+{% block title %}Operator Terminal | ParkSmart Pro Enterprise{% endblock %}
+
+{% block extra_css %}
+<style>
+    .floor-tab-btn {
+        font-weight: 700;
+        border-radius: 9999px;
+        padding: 0.5rem 1.25rem;
+    }
+    .bay-grid-commercial {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+    }
+    .slot-box {
+        border-radius: 12px;
+        padding: 12px;
+        border: 2px solid;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        position: relative;
+    }
+    .slot-box:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.08);
+    }
+    .slot-vacant {
+        background: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.35);
+        color: #065f46;
+    }
+    [data-bs-theme="dark"] .slot-vacant {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.4);
+        color: #34d399;
+    }
+    .slot-occupied {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.35);
+        color: #991b1b;
+    }
+    [data-bs-theme="dark"] .slot-occupied {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.45);
+        color: #f87171;
+    }
+    .slot-ev-active {
+        background: rgba(14, 165, 233, 0.09);
+        border-color: rgba(14, 165, 233, 0.5);
+        color: #0369a1;
+    }
+    [data-bs-theme="dark"] .slot-ev-active {
+        background: rgba(14, 165, 233, 0.15);
+        border-color: rgba(14, 165, 233, 0.6);
+        color: #38bdf8;
+    }
+    .rto-feedback-box {
+        transition: all 0.2s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <!-- Top KPI Metric Strip -->
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 bg-white dark:bg-slate-900 card-custom p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon-wrapper bg-primary text-white">
+                    <i class="bi bi-display"></i>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-0">Operator Terminal</h4>
+                    <span class="text-muted small">
+                        Multi-Level Facility &bull; {{ settings.facility_name }} &bull; Shift: {{ settings.operator_name }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Operational Metrics Badges -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 fs-7">
+                    <i class="bi bi-check-circle me-1"></i> Available: <strong>{{ available_spots }}</strong> / {{ total_slots }}
+                </div>
+                <div class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-3 py-2 fs-7">
+                    <i class="bi bi-car-front me-1"></i> Parked: <strong>{{ occupied_count }}</strong> ({{ occupancy_pct }}%)
+                </div>
+                <div class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-3 py-2 fs-7">
+                    <i class="bi bi-lightning-charge-fill me-1"></i> EV Charging: <strong>{{ active_ev_count }}</strong>
+                </div>
+
+                <!-- Primary Check-In CTA Button -->
+                <button class="btn btn-primary rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#checkInModal">
+                    <i class="bi bi-plus-circle-fill fs-5"></i> Check In Vehicle <span class="badge bg-white text-primary small d-none d-md-inline">Alt+N</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multi-Floor Parking Bays Visualizer -->
+    <div class="col-12">
+        <div class="card card-custom">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-building text-primary fs-5"></i>
+                    <h5 class="fw-bold mb-0">Multi-Floor Car Parking Map</h5>
+                    <span class="badge bg-secondary-subtle text-secondary small">Real-Time Sensor State</span>
+                </div>
+
+                <!-- Floor Switcher Tabs -->
+                <ul class="nav nav-pills gap-1" id="floorTab" role="tablist">
+                    {% for floor in floors %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link floor-tab-btn {% if forloop.first %}active{% endif %}" 
+                                    id="tab-{{ floor.code }}" 
+                                    data-bs-toggle="pill" 
+                                    data-bs-target="#content-{{ floor.code }}" 
+                                    type="button" 
+                                    role="tab">
+                                {% if floor.is_ev_enabled %}<i class="bi bi-lightning-charge-fill text-warning me-1"></i>{% endif %}
+                                {{ floor.code }} <span class="badge bg-dark bg-opacity-25 ms-1">{{ floor.occupied_count }}/{{ floor.total_slots }}</span>
+                            </button>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="card-body px-4 pb-4">
+                <div class="tab-content" id="floorTabContent">
+                    {% for floor in floors %}
+                        <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="content-{{ floor.code }}" role="tabpanel">
+                            <!-- Floor Banner -->
+                            <div class="d-flex justify-content-between align-items-center mb-3 p-2 px-3 rounded bg-light dark:bg-slate-800">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge {% if floor.is_ev_enabled %}bg-success{% else %}bg-primary{% endif %} px-2 py-1 fw-bold">{{ floor.code }}</span>
+                                    <span class="fw-bold">{{ floor.name }}</span>
+                                    {% if floor.is_ev_enabled %}
+                                        <span class="badge ev-badge"><i class="bi bi-lightning-charge"></i> 7.2 kW EV Smart Bays</span>
+                                    {% endif %}
+                                </div>
+                                <div class="small text-muted">
+                                    Occupancy: <strong>{{ floor.occupancy_percentage }}%</strong> ({{ floor.occupied_count }} occupied / {{ floor.available_count }} free)
+                                </div>
+                            </div>
+
+                            <!-- Floor Bays Grid -->
+                            <div class="bay-grid-commercial">
+                                {% for slot in floor.slots.all %}
+                                    {% with veh=slot.active_vehicle %}
+                                        <div class="slot-box {% if slot.is_occupied %}{% if veh and veh.ev_charging_requested %}slot-ev-active{% else %}slot-occupied{% endif %}{% else %}slot-vacant{% endif %}">
+                                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                                <span class="font-monospace fw-bold fs-6">{{ slot.slot_number }}</span>
+                                                {% if slot.is_ev_bay %}
+                                                    <span class="badge bg-warning text-dark px-1 py-0 small"><i class="bi bi-lightning-charge-fill"></i> EV</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary bg-opacity-25 text-secondary px-1 py-0 small">{{ slot.slot_type }}</span>
+                                                {% endif %}
+                                            </div>
+
+                                            {% if slot.is_occupied and veh %}
+                                                <div class="font-monospace fw-bold text-truncate" title="{{ veh.license_plate }}">
+                                                    {{ veh.license_plate }}
+                                                </div>
+                                                <div class="small opacity-75 text-truncate">{{ veh.vehicle_type }}</div>
+                                                <div class="small mt-1 d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-stopwatch"></i> {{ veh.duration_display }}</span>
+                                                    <a href="{% url 'exit_vehicle' veh.id %}" class="btn btn-sm btn-outline-danger py-0 px-2 rounded-pill fw-bold" onclick="return confirm('Checkout {{ veh.license_plate }} and compute bill?');">
+                                                        Exit
+                                                    </a>
+                                                </div>
+
+                                                {% if veh.ev_session %}
+                                                    <div class="mt-2 pt-1 border-top border-info border-opacity-25 small">
+                                                        <div class="d-flex justify-content-between">
+                                                            <span><i class="bi bi-battery-charging text-info"></i> {{ veh.ev_session.battery_percentage }}%</span>
+                                                            <span class="fw-bold">{{ veh.ev_session.energy_kwh }} kWh</span>
+                                                        </div>
+                                                        <div class="progress mt-1" style="height: 4px;">
+                                                            <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: {{ veh.ev_session.battery_percentage }}%"></div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% else %}
+                                                <div class="py-2 text-center text-muted small">
+                                                    <i class="bi bi-check2-circle text-success fs-5"></i>
+                                                    <div class="fw-semibold text-success mt-1">AVAILABLE</div>
+                                                </div>
+                                                <div class="text-center">
+                                                    <button class="btn btn-sm btn-outline-success py-0 px-2 rounded-pill w-100" data-bs-toggle="modal" data-bs-target="#checkInModal" onclick="document.getElementById('id_slot').value='{{ slot.id }}';">
+                                                        Park Here
+                                                    </button>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endwith %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Parked Vehicles Commercial Register -->
+    <div class="col-12">
+        <div class="card card-custom">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 px-4 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-car-front text-primary fs-5"></i>
+                    <h5 class="fw-bold mb-0">Active Parked Fleet</h5>
+                    <span class="badge bg-primary rounded-pill">{{ active_vehicles|length }}</span>
+                </div>
+                <div class="small text-muted">
+                    Tariff: <strong>₹{{ settings.hourly_rate }}/hr</strong> (Max ₹{{ settings.daily_max_rate }}/day) &bull; EV: <strong>₹{{ settings.ev_rate_per_kwh }}/kWh</strong>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light dark:table-dark small text-uppercase">
+                            <tr>
+                                <th class="ps-4">License Plate</th>
+                                <th>Category</th>
+                                <th>Floor & Bay</th>
+                                <th>Check-In Time</th>
+                                <th>Duration</th>
+                                <th>EV Power Telemetry</th>
+                                <th class="text-end pe-4">Workstation Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for veh in active_vehicles %}
+                                <tr>
+                                    <td class="ps-4">
+                                        <span class="font-monospace fw-bold fs-6">{{ veh.license_plate }}</span>
+                                        {% if veh.is_ev %}
+                                            <span class="badge ev-badge ms-1 small">⚡ EV</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary">{{ veh.vehicle_type }}</span>
+                                    </td>
+                                    <td>
+                                        {% if veh.slot %}
+                                            <span class="badge bg-dark font-monospace">{{ veh.slot.slot_number }}</span>
+                                            <span class="small text-muted">({{ veh.slot.floor.code }})</span>
+                                        {% else %}
+                                            <span class="text-muted small">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">{{ veh.entry_time|date:"d M, H:i" }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border font-monospace">{{ veh.duration_display }}</span>
+                                        <span class="small text-muted">({{ veh.duration_hours }}h billed)</span>
+                                    </td>
+                                    <td>
+                                        {% if veh.ev_session %}
+                                            <div style="min-width: 140px;">
+                                                <div class="d-flex justify-content-between small">
+                                                    <span class="text-info fw-semibold"><i class="bi bi-battery-charging"></i> {{ veh.ev_session.battery_percentage }}%</span>
+                                                    <span>{{ veh.ev_session.energy_kwh }} kWh</span>
+                                                </div>
+                                                <div class="progress" style="height: 5px;">
+                                                    <div class="progress-bar bg-info" style="width: {{ veh.ev_session.battery_percentage }}%"></div>
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted small">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'exit_vehicle' veh.id %}" class="btn btn-success fw-bold px-3" onclick="return confirm('Process checkout and invoice for {{ veh.license_plate }}?');">
+                                                <i class="bi bi-cash-coin me-1"></i> Checkout & Bill
+                                            </a>
+                                            <a href="{% url 'edit_vehicle' veh.id %}" class="btn btn-outline-secondary" title="Edit Plate or Category">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{% url 'delete_vehicle' veh.id %}" class="btn btn-outline-danger" title="Purge Record" onclick="return confirm('Purge record for {{ veh.license_plate }}?');">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5 text-muted">
+                                        <i class="bi bi-check2-circle fs-2 text-success d-block mb-2"></i>
+                                        All bays are vacant. Check in arriving vehicles using the button above.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- POKA-YOKE VEHICLE CHECK-IN MODAL (With Live RTO AJAX Guard) -->
+<!-- ========================================================= -->
+<div class="modal fade" id="checkInModal" tabindex="-1" aria-labelledby="checkInModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content card-custom">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="stat-icon-wrapper bg-primary text-white" style="width: 36px; height: 36px; font-size: 1.1rem;">
+                        <i class="bi bi-car-front-fill"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold" id="checkInModalLabel">Fast Vehicle Check-In</h5>
+                        <p class="text-muted small mb-0">Protected by Poka-Yoke RTO Anti-Error Validation</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <form method="POST" action="{% url 'add_vehicle' %}" id="checkInForm">
+                {% csrf_token %}
+                <div class="modal-body pt-3">
+                    <!-- License Plate Input with Instant RTO Telemetry -->
+                    <div class="mb-3">
+                        <label for="id_license_plate" class="form-label fw-bold small text-muted">
+                            Vehicle License Plate <span class="text-danger">*</span>
+                        </label>
+                        {{ form.license_plate }}
+                        
+                        <!-- Real-Time Poka-Yoke Feedback Box -->
+                        <div id="rtoFeedbackBox" class="rto-feedback-box mt-2 p-2 rounded small d-none">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Vehicle Type -->
+                    <div class="mb-3">
+                        <label for="id_vehicle_type" class="form-label fw-bold small text-muted">Vehicle Category</label>
+                        {{ form.vehicle_type }}
+                    </div>
+
+                    <!-- Multi-Floor Slot Allocation -->
+                    <div class="mb-3">
+                        <label for="id_slot" class="form-label fw-bold small text-muted">
+                            Floor & Bay Allotment <span class="badge bg-secondary-subtle text-secondary">Auto-Assign Enabled</span>
+                        </label>
+                        {{ form.slot }}
+                        <div class="form-text small">Leave as auto-assign for smart routing based on vehicle type and EV requirements.</div>
+                    </div>
+
+                    <!-- EV Integration Options -->
+                    <div class="card p-3 mb-2 bg-light dark:bg-slate-800 border-0">
+                        <div class="fw-bold small mb-2 text-primary d-flex align-items-center gap-1">
+                            <i class="bi bi-lightning-charge-fill text-warning"></i> Electric Vehicle (EV) Station Options
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            {{ form.is_ev }}
+                            <label class="form-check-label small fw-semibold" for="id_is_ev">This is an Electric Vehicle (EV)</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            {{ form.ev_charging_requested }}
+                            <label class="form-check-label small fw-semibold" for="id_ev_charging_requested">
+                                Connect to 7.2 kW Fast Charger (B1 Hub @ ₹{{ settings.ev_rate_per_kwh }}/kWh)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="submitCheckInBtn" class="btn btn-primary rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check-circle-fill me-1"></i> Register & Open Gate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Real-Time Poka-Yoke RTO License Plate Validation Engine
+    const plateInput = document.getElementById('id_license_plate');
+    const feedbackBox = document.getElementById('rtoFeedbackBox');
+    const submitBtn = document.getElementById('submitCheckInBtn');
+    const isEvCheckbox = document.getElementById('id_is_ev');
+    const evChargeCheckbox = document.getElementById('id_ev_charging_requested');
+    const vTypeSelect = document.getElementById('id_vehicle_type');
+
+    let debounceTimer = null;
+
+    function checkRTOValidation() {
+        const raw = plateInput.value.trim();
+        if (!raw) {
+            feedbackBox.classList.add('d-none');
+            submitBtn.disabled = false;
+            return;
+        }
+
+        fetch(`/api/validate-plate/?plate=${encodeURIComponent(raw)}`)
+            .then(res => res.json())
+            .then(data => {
+                feedbackBox.classList.remove('d-none');
+                if (data.is_valid) {
+                    feedbackBox.className = "rto-feedback-box mt-2 p-2 rounded small bg-success bg-opacity-10 text-success border border-success border-opacity-25";
+                    feedbackBox.innerHTML = `
+                        <div class="fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Valid Indian License Plate: ${data.normalized}</div>
+                        <div class="small opacity-75">${data.details.state_name} &bull; ${data.details.district_name} (Code: ${data.details.state_code}-${data.details.rto_number})</div>
+                    `;
+                    submitBtn.disabled = false;
+                } else {
+                    feedbackBox.className = "rto-feedback-box mt-2 p-2 rounded small bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25";
+                    feedbackBox.innerHTML = `
+                        <div class="fw-bold"><i class="bi bi-shield-x me-1"></i> Poka-Yoke Protection Alert:</div>
+                        <div>${data.message}</div>
+                    `;
+                    // Visual warning for invalid RTO
+                    submitBtn.disabled = false; // allow form submission to show backend validation message as well
+                }
+            })
+            .catch(err => {
+                console.error("RTO API error:", err);
+            });
+    }
+
+    if (plateInput) {
+        plateInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(checkRTOValidation, 300);
+        });
+    }
+
+    // Auto-toggle EV settings if Electric Vehicle is chosen in category
+    if (vTypeSelect) {
+        vTypeSelect.addEventListener('change', function() {
+            if (this.value.includes('Electric')) {
+                if (isEvCheckbox) isEvCheckbox.checked = true;
+                if (evChargeCheckbox) evChargeCheckbox.checked = true;
+            }
+        });
+    }
+
+    if (evChargeCheckbox) {
+        evChargeCheckbox.addEventListener('change', function() {
+            if (this.checked && isEvCheckbox) {
+                isEvCheckbox.checked = true;
+            }
+        });
+    }
+</script>
+{% endblock %}

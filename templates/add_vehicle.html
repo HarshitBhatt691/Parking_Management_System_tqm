@@ -1,39 +1,115 @@
 {% extends 'base.html' %}
 
+{% block title %}Check In Vehicle | ParkSmart Pro Enterprise{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">New Vehicle Entry</h5>
+    <div class="col-md-7 col-lg-6">
+        <div class="card card-custom p-4 shadow-sm border-0">
+            <div class="d-flex align-items-center gap-2 mb-3 border-bottom pb-3">
+                <div class="stat-icon-wrapper bg-primary text-white" style="width: 40px; height: 40px; font-size: 1.2rem;">
+                    <i class="bi bi-car-front-fill"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold mb-0">Vehicle Ingress Check-In</h5>
+                    <small class="text-muted">Protected by Poka-Yoke RTO Anti-Error Engine</small>
+                </div>
             </div>
-            <div class="card-body p-4">
-                <form method="post" novalidate>
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.license_plate.id_for_label }}" class="form-label fw-bold">License Plate</label>
-                        {{ form.license_plate }}
-                        {% if form.license_plate.errors %}
-                            <div class="text-danger small mt-1">{{ form.license_plate.errors.0 }}</div>
-                        {% endif %}
-                    </div>
 
-                    <div class="mb-4">
-                        <label for="{{ form.vehicle_type.id_for_label }}" class="form-label fw-bold">Vehicle Type</label>
-                        {{ form.vehicle_type }}
-                        {% if form.vehicle_type.errors %}
-                            <div class="text-danger small mt-1">{{ form.vehicle_type.errors.0 }}</div>
-                        {% endif %}
-                    </div>
+            <form method="post" novalidate id="pageCheckInForm">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="{{ form.license_plate.id_for_label }}" class="form-label fw-bold small text-muted">
+                        License Plate Number <span class="text-danger">*</span>
+                    </label>
+                    {{ form.license_plate }}
+                    <div id="pageRtoFeedback" class="mt-2 p-2 rounded small d-none"></div>
+                    {% if form.license_plate.errors %}
+                        <div class="alert alert-danger small mt-2 py-2 mb-0">
+                            <i class="bi bi-shield-x me-1"></i> {{ form.license_plate.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
 
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
-                        <button type="submit" class="btn btn-success px-4">Register Entry</button>
+                <div class="mb-3">
+                    <label for="{{ form.vehicle_type.id_for_label }}" class="form-label fw-bold small text-muted">
+                        Vehicle Classification
+                    </label>
+                    {{ form.vehicle_type }}
+                    {% if form.vehicle_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.vehicle_type.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.slot.id_for_label }}" class="form-label fw-bold small text-muted">
+                        Floor & Bay Allocation (Auto-Assign Enabled)
+                    </label>
+                    {{ form.slot }}
+                    <small class="form-text text-muted">Auto-assigns optimal floor (EV to B1, SUV to Ground).</small>
+                    {% if form.slot.errors %}
+                        <div class="text-danger small mt-1">{{ form.slot.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="card p-3 mb-4 bg-light dark:bg-slate-800 border-0">
+                    <div class="fw-bold small mb-2 text-primary d-flex align-items-center gap-1">
+                        <i class="bi bi-lightning-charge-fill text-warning"></i> EV Fast Charging Station
                     </div>
-                </form>
-            </div>
+                    <div class="form-check form-switch mb-2">
+                        {{ form.is_ev }}
+                        <label class="form-check-label small fw-semibold" for="{{ form.is_ev.id_for_label }}">
+                            This is an Electric Vehicle (EV)
+                        </label>
+                    </div>
+                    <div class="form-check form-switch">
+                        {{ form.ev_charging_requested }}
+                        <label class="form-check-label small fw-semibold" for="{{ form.ev_charging_requested.id_for_label }}">
+                            Connect to 7.2 kW Fast Charger (B1 Bay @ ₹{{ settings.ev_rate_per_kwh }}/kWh)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{% url 'operator_terminal' %}" class="btn btn-outline-secondary rounded-pill px-4">Cancel</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                        <i class="bi bi-check-circle-fill me-1"></i> Register Entry & Open Gate
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+
+<script>
+    const plateInput = document.getElementById('id_license_plate');
+    const feedbackBox = document.getElementById('pageRtoFeedback');
+    let debounceTimer = null;
+
+    if (plateInput) {
+        plateInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                const raw = plateInput.value.trim();
+                if (!raw) {
+                    feedbackBox.classList.add('d-none');
+                    return;
+                }
+                fetch(`/api/validate-plate/?plate=${encodeURIComponent(raw)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        feedbackBox.classList.remove('d-none');
+                        if (data.is_valid) {
+                            feedbackBox.className = "mt-2 p-2 rounded small bg-success bg-opacity-10 text-success border border-success border-opacity-25";
+                            feedbackBox.innerHTML = `<strong>Valid: ${data.normalized}</strong> (${data.details.state_name} - ${data.details.district_name})`;
+                        } else {
+                            feedbackBox.className = "mt-2 p-2 rounded small bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25";
+                            feedbackBox.innerHTML = `<strong>Poka-Yoke:</strong> ${data.message}`;
+                        }
+                    });
+            }, 300);
+        });
+    }
+</script>
 {% endblock %}

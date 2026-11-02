@@ -1,275 +1,572 @@
+import json
+import math
+from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.db.models import Sum, Count, Q
-from .models import Vehicle, ProfileSettings
-from .forms import VehicleForm, ProfileSettingsForm, OperatorCreationForm
-from . import sqc_tools
+from django.http import JsonResponse
+from django.utils import timezone
+
+from .models import Floor, ParkingSlot, Vehicle, EVChargingSession, SecurityIncident, ProfileSettings
+from .forms import VehicleCheckInForm, VehicleEditForm, ProfileSettingsForm, SecurityIncidentForm
+from .rto_validator import validate_and_normalize_plate
 
 
-# ==========================================
-# AUTHENTICATION & PERSONA WORKSTATION VIEWS
-# ==========================================
+# ---------------------------------------------------------
+# 1. AUTH & PERSONA LAUNCHPAD (LANDING PAGE - /)
+# ---------------------------------------------------------
+def landing_auth(request):
+    """
+    Main entry point of the software. Displays the interactive
+    stakeholder persona selector and credentials login.
+    """
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
+    
+    # Live stats for landing page banner
+    total_slots = ParkingSlot.objects.count() or 48
+    active_count = Vehicle.objects.filter(status='Parked').count()
+    free_slots = max(0, total_slots - active_count)
+    ev_active_count = EVChargingSession.objects.filter(status='Charging').count()
 
-def login_view(request):
-    """Strictly authenticates registered operators and admins with mandatory credentials.
-    Supports seamless account switching between Admin and Operator."""
-    if request.method == 'POST':
-        u_name = request.POST.get('username', '').strip()
-        p_word = request.POST.get('password', '').strip()
-
-        if not u_name or not p_word:
-            messages.error(request, "Please enter both username and password.")
-            return render(request, 'login.html')
-
-        user = authenticate(request, username=u_name, password=p_word)
+    if request.method == 'POST' and 'login_action' in request.POST:
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '').strip()
+        user = authenticate(request, username=username, password=password)
         if user is not None:
-            if user.is_active:
-                # If a different account was previously active, terminate that session first
-                if request.user.is_authenticated and request.user.id != user.id:
-                    logout(request)
-
-                login(request, user)
-                role_label = "Supervisor / Admin" if (user.is_staff or user.is_superuser) else "Gate Operator"
-                messages.success(request, f"Welcome, {user.get_full_name() or user.username}! Authenticated as {role_label}.")
-                next_url = request.POST.get('next') or request.GET.get('next') or 'dashboard'
-                return redirect(next_url)
+            login(request, user)
+            messages.success(request, f"Welcome back, {user.first_name or user.username}!")
+            # Route to appropriate workstation based on role
+            if user.is_superuser or user.username == 'admin':
+                return redirect('admin_console')
+            elif user.username == 'manager':
+                return redirect('manager_console')
+            elif user.username == 'guard':
+                return redirect('security_console')
+            elif user.username == 'customer':
+                return redirect('customer_portal')
             else:
-                messages.error(request, "Access Denied: This account has been deactivated.")
+                return redirect('operator_terminal')
         else:
-            messages.error(request, "Access Denied: Invalid credentials. Only registered users can enter.")
+            messages.error(request, "Invalid username or password. Please verify credentials or use 1-Click Quick Access.")
 
-        return render(request, 'login.html')
+    context = {
+        'settings': settings,
+        'total_slots': total_slots,
+        'active_count': active_count,
+        'free_slots': free_slots,
+        'ev_active_count': ev_active_count,
+    }
+    return render(request, 'landing_auth.html', context)
 
-    # GET request: Render login page (allows viewing credentials and switching accounts)
-    return render(request, 'login.html')
+
+def quick_persona_login(request, persona):
+    """
+    1-Click Quick Test Login for evaluating stakeholders instantly.
+    Supported: 'admin', 'manager', 'operator', 'guard', 'customer'.
+    """
+    user_mapping = {
+        'admin': 'admin',
+        'manager': 'manager',
+        'operator': 'operator',
+        'guard': 'guard',
+        'customer': 'customer',
+        'harshit008': 'harshit008',
+    }
+
+    username = user_mapping.get(persona.lower())
+    if not username:
+        messages.error(request, "Invalid persona requested.")
+        return redirect('landing_auth')
+
+    user = User.objects.filter(username=username).first()
+    if not user:
+        # Auto-create if somehow missing
+        is_staff = (persona in ['admin', 'manager', 'harshit008'])
+        is_super = (persona in ['admin', 'harshit008'])
+        user = User.objects.create_user(
+            username=username,
+            password=f"{username}123",
+            first_name=f"{persona.capitalize()} User",
+            is_staff=is_staff,
+            is_superuser=is_super
+        )
+
+    login(request, user)
+    request.session['stakeholder_role'] = persona
+
+    route_destinations = {
+        'admin': 'admin_console',
+        'manager': 'manager_console',
+        'operator': 'operator_terminal',
+        'guard': 'security_console',
+        'customer': 'customer_portal',
+        'harshit008': 'operator_terminal',
+    }
+    dest = route_destinations.get(persona, 'operator_terminal')
+    messages.success(request, f"Signed in as {user.first_name} ({persona.upper()} Role).")
+    return redirect(dest)
 
 
 def logout_view(request):
-    """Safely logs out the active user and terminates the session."""
-    username = request.user.username if request.user.is_authenticated else ""
     logout(request)
-    if username:
-        messages.info(request, f"User session for '{username}' signed out successfully.")
-    else:
-        messages.info(request, "You have been signed out.")
-    return redirect('login')
+    messages.info(request, "You have been logged out of the terminal.")
+    return redirect('landing_auth')
 
 
-# ==========================================
-# SUPERVISOR / ADMIN MANAGEMENT CONSOLE
-# ==========================================
-
-@login_required(login_url='login')
-def admin_panel(request):
-    """Dedicated in-app Administrative Panel for user management, role governance & system health."""
-    if not (request.user.is_staff or request.user.is_superuser):
-        messages.error(request, "Access Denied: You need Facility Admin privileges to access the Admin Console.")
-        return redirect('dashboard')
-
-    if request.method == 'POST':
-        form = OperatorCreationForm(request.POST)
-        if form.is_valid():
-            new_user = form.save()
-            role = "Admin" if new_user.is_staff else "Gate Operator"
-            messages.success(request, f"Account '{new_user.username}' created successfully as {role}!")
-            return redirect('admin_panel')
-    else:
-        form = OperatorCreationForm()
-
-    users = User.objects.all().order_by('-date_joined')
-    total_users = users.count()
-    admin_count = users.filter(Q(is_staff=True) | Q(is_superuser=True)).count()
-    operator_count = total_users - admin_count
-    
-    total_vehicles = Vehicle.objects.count()
-    total_revenue = Vehicle.objects.filter(status='Exited').aggregate(Sum('fee'))['fee__sum'] or 0.00
-    active_in_lot = Vehicle.objects.filter(status='Parked').count()
-
-    context = {
-        'users': users,
-        'form': form,
-        'total_users': total_users,
-        'admin_count': admin_count,
-        'operator_count': operator_count,
-        'total_vehicles': total_vehicles,
-        'total_revenue': total_revenue,
-        'active_in_lot': active_in_lot,
-    }
-    return render(request, 'admin_panel.html', context)
-
-
-# ==========================================
-# CORE PARKING MANAGEMENT OPERATIONS
-# ==========================================
-
-@login_required(login_url='login')
-def dashboard(request):
+# ---------------------------------------------------------
+# 2. OPERATOR / CASHIER WORKSTATION (/operator/)
+# ---------------------------------------------------------
+def operator_terminal(request):
+    """
+    Primary operational dashboard for gate operator and cashiers.
+    Features multi-floor car visualizer, quick check-in modal with Poka-Yoke RTO,
+    and instant checkout billing.
+    """
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
-    total_capacity = settings.total_capacity or 50
-    active_vehicles = Vehicle.objects.filter(status='Parked').order_by('-entry_time')
+    floors = Floor.objects.all().prefetch_related('slots__vehicles')
+
+    active_vehicles = Vehicle.objects.filter(status='Parked').select_related('slot', 'slot__floor', 'ev_session').order_by('-entry_time')
     occupied_count = active_vehicles.count()
-    available_spots = max(0, total_capacity - occupied_count)
-    occupancy_pct = int((occupied_count / total_capacity) * 100) if total_capacity else 0
-    total_revenue = Vehicle.objects.filter(status='Exited').aggregate(Sum('fee'))['fee__sum'] or 0.00
+    total_slots = ParkingSlot.objects.count()
+    available_spots = max(0, total_slots - occupied_count)
+    occupancy_pct = int((occupied_count / total_slots) * 100) if total_slots else 0
 
-    # Recent exit turnover (shows recent activity even when active lot is quiet)
-    recent_exits = Vehicle.objects.filter(status='Exited').order_by('-exit_time')[:5]
+    # EV Statistics
+    active_ev_charging = EVChargingSession.objects.filter(status='Charging')
+    active_ev_count = active_ev_charging.count()
 
-    # Generate visual 2D parking slots map (24 representative bays: P-01 to P-24)
-    active_list = list(active_vehicles)
-    display_bays = 24
-    slots = []
-    for i in range(display_bays):
-        is_occ = i < len(active_list)
-        veh = active_list[i] if is_occ else None
-        slots.append({
-            'code': f"P-{i+1:02d}",
-            'is_occupied': is_occ,
-            'vehicle': veh,
-        })
-
-    # Vehicle breakdown
-    type_counts = Vehicle.objects.filter(status='Parked').values('vehicle_type').annotate(count=Count('id'))
+    form = VehicleCheckInForm()
 
     context = {
-        'vehicles': active_vehicles,
-        'recent_exits': recent_exits,
-        'slots': slots,
-        'type_counts': type_counts,
         'settings': settings,
-        'total_capacity': total_capacity,
+        'floors': floors,
+        'active_vehicles': active_vehicles,
+        'total_slots': total_slots,
         'occupied_count': occupied_count,
         'available_spots': available_spots,
         'occupancy_pct': occupancy_pct,
-        'total_revenue': total_revenue,
+        'active_ev_count': active_ev_count,
+        'form': form,
     }
-    return render(request, 'dashboard.html', context)
+    return render(request, 'operator_terminal.html', context)
 
 
-# CREATE (C)
-@login_required(login_url='login')
+# Alias for backward compatibility
+dashboard = operator_terminal
+
+
 def add_vehicle(request):
+    """
+    Handle vehicle check-in with Poka-Yoke RTO plate validation
+    and smart automatic floor/bay allocation.
+    """
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
     if request.method == 'POST':
-        form = VehicleForm(request.POST)
+        form = VehicleCheckInForm(request.POST)
         if form.is_valid():
-            vehicle = form.save()
-            messages.success(request, f"Vehicle {vehicle.license_plate} checked in successfully at {vehicle.entry_time.strftime('%I:%M %p')}!")
-            return redirect('dashboard')
-    else:
-        form = VehicleForm()
-    return render(request, 'add_vehicle.html', {'form': form})
+            vehicle = form.save(commit=False)
+            assigned_slot = form.cleaned_data.get('slot')
+
+            # Intelligent Automatic Slot Allocation if none selected manually
+            if not assigned_slot:
+                if vehicle.ev_charging_requested or vehicle.is_ev:
+                    # Prefer Basement B1 EV Bays
+                    assigned_slot = ParkingSlot.objects.filter(is_occupied=False, is_ev_bay=True).first()
+                elif vehicle.vehicle_type == 'SUV':
+                    # Prefer Ground Floor SUV bays
+                    assigned_slot = ParkingSlot.objects.filter(is_occupied=False, slot_type='SUV').first()
+
+                # Fallback to any available slot
+                if not assigned_slot:
+                    assigned_slot = ParkingSlot.objects.filter(is_occupied=False).first()
+
+            if not assigned_slot:
+                messages.error(request, "Parking Lot is 100% FULL! No available bays on any floor.")
+                return redirect('operator_terminal')
+
+            vehicle.slot = assigned_slot
+            vehicle.status = 'Parked'
+            vehicle.save()
+
+            # Mark slot as occupied
+            assigned_slot.is_occupied = True
+            assigned_slot.save()
+
+            # Initialize EV Charging Session if EV bay / charging requested
+            if vehicle.is_ev and (vehicle.ev_charging_requested or assigned_slot.is_ev_bay):
+                EVChargingSession.objects.create(
+                    vehicle=vehicle,
+                    slot=assigned_slot,
+                    status='Charging',
+                    start_time=vehicle.entry_time,
+                    rate_per_kwh=settings.ev_rate_per_kwh,
+                    energy_kwh=0.00,
+                    total_cost=0.00
+                )
+
+            messages.success(
+                request,
+                f"Vehicle {vehicle.license_plate} checked in! Allocated Bay: {assigned_slot.slot_number} ({assigned_slot.floor.name})."
+            )
+            return redirect('operator_terminal')
+        else:
+            # Poka-Yoke validation errors caught
+            for field, errors in form.errors.items():
+                for err in errors:
+                    messages.error(request, f"{err}")
+            return redirect('operator_terminal')
+
+    return redirect('operator_terminal')
 
 
-# UPDATE (U) - Modify vehicle details (fix typo in plate or type)
-@login_required(login_url='login')
 def edit_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     if request.method == 'POST':
-        form = VehicleForm(request.POST, instance=vehicle)
+        form = VehicleEditForm(request.POST, instance=vehicle)
         if form.is_valid():
             form.save()
             messages.success(request, f"Vehicle details for {vehicle.license_plate} updated successfully!")
-            next_url = request.GET.get('next', 'dashboard')
-            return redirect(next_url)
+            return redirect('operator_terminal')
     else:
-        form = VehicleForm(instance=vehicle)
+        form = VehicleEditForm(instance=vehicle)
     return render(request, 'edit_vehicle.html', {'form': form, 'vehicle': vehicle})
 
 
-# DELETE (D) - Remove / Cancel accidental or cancelled entry (Admin Protected)
-@login_required(login_url='login')
 def delete_vehicle(request, vehicle_id):
-    next_url = request.GET.get('next', 'dashboard')
-    
-    # RBAC Security Guard: Only Admins can permanently delete audit records
-    if not (request.user.is_staff or request.user.is_superuser):
-        messages.error(request, "Permission Denied: Only Facility Supervisors / Admins have authority to void vehicle records (TQM Audit Protection).")
-        return redirect(next_url)
-
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     plate = vehicle.license_plate
+    if vehicle.slot:
+        vehicle.slot.is_occupied = False
+        vehicle.slot.save()
     vehicle.delete()
-    messages.warning(request, f"Vehicle record {plate} has been permanently deleted by {request.user.username}.")
-    return redirect(next_url)
+    messages.warning(request, f"Record for vehicle {plate} was cancelled and purged.")
+    return redirect('operator_terminal')
 
 
-# UPDATE (U) - Checkout & automated billing calculation
-@login_required(login_url='login')
 def exit_vehicle(request, vehicle_id):
+    """
+    Executes vehicle checkout, releases the multi-floor slot,
+    computes unified parking fee + EV charging power costs,
+    and displays the printable digital invoice.
+    """
     vehicle = get_object_or_404(Vehicle, id=vehicle_id, status='Parked')
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
-    
-    # Calculate fee using configured hourly rate and daily cap
-    fee = vehicle.calculate_fee(rate_per_hour=float(settings.hourly_rate))
-    vehicle.save()
-    
-    duration_str = vehicle.duration_display
-    messages.success(
-        request, 
-        f"Vehicle {vehicle.license_plate} checked out! Duration: {duration_str} ({vehicle.duration_hours} hrs billed). Total Fee: ₹{fee:.2f}"
+
+    # Compute fee with configured parameters
+    fee = vehicle.calculate_fee(
+        rate_per_hour=float(settings.hourly_rate),
+        daily_max_cap=float(settings.daily_max_rate),
+        ev_rate_kwh=float(settings.ev_rate_per_kwh)
     )
-    next_url = request.GET.get('next', 'dashboard')
-    return redirect(next_url)
+    vehicle.save()
+
+    messages.success(
+        request,
+        f"Checkout complete for {vehicle.license_plate}! Total billed: ₹{fee:.2f} "
+        f"(Parking: ₹{vehicle.parking_fee:.2f} + EV Energy: ₹{vehicle.ev_charging_fee:.2f})."
+    )
+    return redirect('receipt_view', vehicle_id=vehicle.id)
 
 
-# READ (R) - Complete Parking History & Audit Log
-@login_required(login_url='login')
+def receipt_view(request, vehicle_id):
+    """
+    Renders commercial 80mm thermal-style POS invoice / e-receipt.
+    """
+    vehicle = get_object_or_404(Vehicle, id=vehicle_id)
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
+    ev_session = getattr(vehicle, 'ev_session', None)
+
+    context = {
+        'vehicle': vehicle,
+        'settings': settings,
+        'ev_session': ev_session,
+        'invoice_num': f"INV-{vehicle.id:06d}",
+        'print_time': timezone.now(),
+    }
+    return render(request, 'receipt.html', context)
+
+
+# ---------------------------------------------------------
+# 3. CUSTOMER / DRIVER SELF-SERVICE PORTAL (/customer/)
+# ---------------------------------------------------------
+def customer_portal(request):
+    """
+    Customer driver self-service interface:
+    - 'Find My Car' search by plate
+    - Floor Vacancy Explorer
+    - Live EV battery status and power meter
+    - Digital e-receipt lookup
+    """
+    query = request.GET.get('plate', '').strip()
+    searched_vehicle = None
+    search_error = None
+    ev_session = None
+
+    if query:
+        # Normalize search input to support relaxed queries like uk04ak5521
+        clean_query = query.replace("-", "").replace(" ", "").upper()
+        # Search active parked vehicles first
+        vehicles = Vehicle.objects.filter(status='Parked')
+        matched = [v for v in vehicles if v.license_plate.replace("-", "").replace(" ", "").upper() == clean_query]
+
+        if matched:
+            searched_vehicle = matched[0]
+            ev_session = getattr(searched_vehicle, 'ev_session', None)
+        else:
+            # Check recently exited
+            exited_matched = [v for v in Vehicle.objects.filter(status='Exited') if v.license_plate.replace("-", "").replace(" ", "").upper() == clean_query]
+            if exited_matched:
+                searched_vehicle = exited_matched[0]
+                ev_session = getattr(searched_vehicle, 'ev_session', None)
+            else:
+                search_error = f"No vehicle found with license plate matching '{query}'. Please check the plate number."
+
+    floors = Floor.objects.all().prefetch_related('slots')
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
+
+    context = {
+        'query': query,
+        'vehicle': searched_vehicle,
+        'ev_session': ev_session,
+        'search_error': search_error,
+        'floors': floors,
+        'settings': settings,
+    }
+    return render(request, 'customer_portal.html', context)
+
+
+# ---------------------------------------------------------
+# 4. SECURITY GUARD CONSOLE (/security/)
+# ---------------------------------------------------------
+def security_console(request):
+    """
+    Dedicated workstation for on-duty security guards:
+    - Simulated Ingress / Egress Barrier gate toggles
+    - Instant License Plate lookups
+    - Security Incident logging and dispatch
+    """
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
+    incidents = SecurityIncident.objects.all()[:15]
+    
+    # Barrier states stored in session
+    barrier_entry = request.session.get('barrier_entry', 'CLOSED')
+    barrier_exit = request.session.get('barrier_exit', 'CLOSED')
+
+    # Guard Plate Lookup
+    plate_lookup = request.GET.get('plate_lookup', '').strip()
+    lookup_result = None
+    if plate_lookup:
+        clean = plate_lookup.replace("-", "").replace(" ", "").upper()
+        active = [v for v in Vehicle.objects.filter(status='Parked') if v.license_plate.replace("-", "").replace(" ", "").upper() == clean]
+        if active:
+            lookup_result = {"status": "REGISTERED_ACTIVE", "vehicle": active[0]}
+        else:
+            is_valid_rto, norm_plate, details = validate_and_normalize_plate(plate_lookup)
+            lookup_result = {
+                "status": "UNKNOWN_VISITOR",
+                "is_valid_rto": is_valid_rto,
+                "norm_plate": norm_plate,
+                "details": details
+            }
+
+    form = SecurityIncidentForm()
+    if request.method == 'POST' and 'log_incident' in request.POST:
+        form = SecurityIncidentForm(request.POST)
+        if form.is_valid():
+            inc = form.save()
+            messages.success(request, f"Security Incident #{inc.id} ({inc.incident_type}) logged successfully.")
+            return redirect('security_console')
+
+    context = {
+        'settings': settings,
+        'incidents': incidents,
+        'barrier_entry': barrier_entry,
+        'barrier_exit': barrier_exit,
+        'lookup_query': plate_lookup,
+        'lookup_result': lookup_result,
+        'form': form,
+    }
+    return render(request, 'security_console.html', context)
+
+
+def security_resolve_incident(request, incident_id):
+    inc = get_object_or_404(SecurityIncident, id=incident_id)
+    inc.is_resolved = True
+    inc.save()
+    messages.success(request, f"Incident #{inc.id} marked as resolved.")
+    return redirect('security_console')
+
+
+def security_toggle_barrier(request, barrier_type):
+    key = f'barrier_{barrier_type}'
+    current = request.session.get(key, 'CLOSED')
+    new_state = 'OPEN' if current == 'CLOSED' else 'CLOSED'
+    request.session[key] = new_state
+    messages.info(request, f"{barrier_type.upper()} Barrier gate override: Switched to {new_state}.")
+    return redirect('security_console')
+
+
+# ---------------------------------------------------------
+# 5. OPERATIONS MANAGER CONSOLE (/manager/)
+# ---------------------------------------------------------
+def manager_console(request):
+    """
+    Executive dashboard for Operations Managers:
+    - Floor occupancy metrics & heatmaps
+    - Revenue Breakdown (Parking vs EV Fast Charging)
+    - Tariff Configuration Form
+    - Fleet mix and turnover logs
+    """
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
+    if request.method == 'POST' and 'update_tariffs' in request.POST:
+        form = ProfileSettingsForm(request.POST, instance=settings)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Commercial tariffs and facility configuration updated successfully!")
+            return redirect('manager_console')
+    else:
+        form = ProfileSettingsForm(instance=settings)
+
+    floors = Floor.objects.all().prefetch_related('slots')
+    total_slots = ParkingSlot.objects.count()
+    active_vehicles = Vehicle.objects.filter(status='Parked')
+    occupied_count = active_vehicles.count()
+    overall_occupancy = int((occupied_count / total_slots) * 100) if total_slots else 0
+
+    # Revenue Analytics
+    exited_vehicles = Vehicle.objects.filter(status='Exited')
+    gross_parking_rev = exited_vehicles.aggregate(Sum('parking_fee'))['parking_fee__sum'] or 0.00
+    gross_ev_rev = exited_vehicles.aggregate(Sum('ev_charging_fee'))['ev_charging_fee__sum'] or 0.00
+    total_gross_rev = gross_parking_rev + gross_ev_rev
+
+    # EV Power Telemetry
+    total_ev_energy = EVChargingSession.objects.aggregate(Sum('energy_kwh'))['energy_kwh__sum'] or 0.00
+    active_ev_chargers = EVChargingSession.objects.filter(status='Charging').count()
+
+    recent_exits = exited_vehicles.order_by('-exit_time')[:8]
+
+    context = {
+        'settings': settings,
+        'form': form,
+        'floors': floors,
+        'total_slots': total_slots,
+        'occupied_count': occupied_count,
+        'overall_occupancy': overall_occupancy,
+        'gross_parking_rev': gross_parking_rev,
+        'gross_ev_rev': gross_ev_rev,
+        'total_gross_rev': total_gross_rev,
+        'total_ev_energy': total_ev_energy,
+        'active_ev_chargers': active_ev_chargers,
+        'recent_exits': recent_exits,
+    }
+    return render(request, 'manager_console.html', context)
+
+
+# ---------------------------------------------------------
+# 6. ADMIN / OWNER CONSOLE (/admin-console/)
+# ---------------------------------------------------------
+def admin_console(request):
+    """
+    System administrator & owner portal:
+    - User account management
+    - Global system audit
+    - Database health & reset tools
+    """
+    settings, _ = ProfileSettings.objects.get_or_create(id=1)
+    users = User.objects.all().order_by('-is_superuser', '-is_staff', 'username')
+    total_users = users.count()
+    total_vehicles = Vehicle.objects.count()
+    total_slots = ParkingSlot.objects.count()
+    total_incidents = SecurityIncident.objects.count()
+
+    context = {
+        'settings': settings,
+        'users': users,
+        'total_users': total_users,
+        'total_vehicles': total_vehicles,
+        'total_slots': total_slots,
+        'total_incidents': total_incidents,
+    }
+    return render(request, 'admin_console.html', context)
+
+
+# ---------------------------------------------------------
+# 7. PARKING HISTORY & AUDIT LOGS (/history/)
+# ---------------------------------------------------------
 def parking_history(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', 'all')
-    
-    vehicles = Vehicle.objects.all().order_by('-entry_time')
+    floor_filter = request.GET.get('floor', 'all')
+
+    vehicles = Vehicle.objects.all().select_related('slot', 'slot__floor', 'ev_session').order_by('-entry_time')
+
     if query:
         vehicles = vehicles.filter(
             Q(license_plate__icontains=query) | Q(vehicle_type__icontains=query)
         )
     if status_filter in ['Parked', 'Exited']:
         vehicles = vehicles.filter(status=status_filter)
+    if floor_filter != 'all':
+        vehicles = vehicles.filter(slot__floor__code=floor_filter)
 
     total_count = vehicles.count()
     total_revenue = vehicles.filter(status='Exited').aggregate(Sum('fee'))['fee__sum'] or 0.00
+    floors = Floor.objects.all()
 
     context = {
         'vehicles': vehicles,
         'query': query,
         'status_filter': status_filter,
+        'floor_filter': floor_filter,
+        'floors': floors,
         'total_count': total_count,
         'total_revenue': total_revenue,
     }
     return render(request, 'history.html', context)
 
 
-# Q08 Feature 5: Facility & Operator Settings
-@login_required(login_url='login')
+# ---------------------------------------------------------
+# 8. PROFILE SETTINGS (/profile/)
+# ---------------------------------------------------------
 def profile_settings(request):
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
-    is_admin = request.user.is_staff or request.user.is_superuser
-    
     if request.method == 'POST':
-        if not is_admin:
-            messages.error(request, "Permission Denied: Only Admins can modify facility parameters and hourly billing rates.")
-            return redirect('profile_settings')
-
         form = ProfileSettingsForm(request.POST, instance=settings)
         if form.is_valid():
             form.save()
-            messages.success(request, "Facility configuration updated successfully!")
+            messages.success(request, "Commercial facility profile updated successfully!")
             return redirect('profile_settings')
     else:
         form = ProfileSettingsForm(instance=settings)
-        
-    return render(request, 'profile_settings.html', {'form': form, 'settings': settings, 'is_admin': is_admin})
+    return render(request, 'profile_settings.html', {'form': form, 'settings': settings})
 
 
-# Q08 Feature 2: Visual Reports (SQC Tools)
-@login_required(login_url='login')
-def sqc_reports(request):
-    pareto_img = sqc_tools.get_pareto_chart()
-    fishbone_img = sqc_tools.get_fishbone_diagram()
-    return render(request, 'sqc_reports.html', {
-        'pareto_chart': pareto_img,
-        'fishbone_chart': fishbone_img,
+# ---------------------------------------------------------
+# 9. REAL-TIME POKA-YOKE RTO VALIDATION API (/api/validate-plate/)
+# ---------------------------------------------------------
+def api_validate_plate(request):
+    """
+    AJAX endpoint for instant Poka-Yoke license plate feedback in check-in modal.
+    """
+    raw_plate = request.GET.get('plate', '')
+    is_valid, message_or_norm, details = validate_and_normalize_plate(raw_plate)
+    return JsonResponse({
+        'is_valid': is_valid,
+        'message': message_or_norm,
+        'normalized': message_or_norm if is_valid else None,
+        'details': details
     })
+
+
+def api_reset_seed(request):
+    """Admin tool to re-seed demo data."""
+    if not request.user.is_superuser and request.user.username != 'admin':
+        messages.error(request, "Permission denied. Admin privileges required.")
+        return redirect('landing_auth')
+
+    from seed_multi_floor import seed
+    seed()
+    messages.success(request, "System database successfully re-seeded with commercial demo data!")
+    return redirect('admin_console')

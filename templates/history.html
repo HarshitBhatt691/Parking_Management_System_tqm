@@ -1,29 +1,17 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<!-- Alert Messages -->
-{% if messages %}
-    {% for message in messages %}
-        <div class="alert alert-{% if message.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show card-custom shadow-sm border-0 d-flex align-items-center mb-4" role="alert">
-            <i class="bi {% if message.tags == 'warning' %}bi-exclamation-triangle-fill text-warning{% else %}bi-check-circle-fill text-success{% endif %} fs-5 me-2"></i>
-            <div>{{ message }}</div>
-            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    {% endfor %}
-{% endif %}
+{% block title %}Parking History & Audit Log | ParkSmart Pro Enterprise{% endblock %}
 
+{% block content %}
 <!-- Header -->
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold mb-0 text-body-emphasis">📋 Complete Parking History & Audit Log</h2>
-        <small class="text-muted">Master database registry with full CRUD management and duration breakdown</small>
+        <h3 class="fw-bold mb-0 text-body-emphasis"><i class="bi bi-clock-history text-primary me-2"></i>Parking Registry & Audit Log</h3>
+        <small class="text-muted">Master transaction ledger, multi-floor bay history, and energy billing breakdown</small>
     </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-3 py-2 shadow-sm">
-            <i class="bi bi-speedometer2 me-1"></i> Dashboard
-        </a>
-        <a href="{% url 'add_vehicle' %}" class="btn btn-primary rounded-pill px-4 py-2 shadow-sm">
-            <i class="bi bi-plus-lg me-1"></i> Park Vehicle
+        <a href="{% url 'operator_terminal' %}" class="btn btn-outline-secondary rounded-pill px-3 py-2 shadow-sm">
+            <i class="bi bi-display me-1"></i> Operator Terminal
         </a>
     </div>
 </div>
@@ -34,11 +22,11 @@
         <div class="col-md-5">
             <div class="input-group input-group-sm">
                 <span class="input-group-text bg-body border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm border-start-0" placeholder="Search by license plate or vehicle type...">
+                <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm border-start-0 font-monospace" placeholder="Search by license plate or vehicle type...">
             </div>
         </div>
         <div class="col-md-4">
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 <a href="?status=all{% if query %}&q={{ query }}{% endif %}" class="btn btn-sm rounded-pill px-3 {% if status_filter == 'all' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
                     All ({{ total_count }})
                 </a>
@@ -51,7 +39,7 @@
             </div>
         </div>
         <div class="col-md-3 text-md-end">
-            <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2 rounded-pill small">
+            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill small">
                 Total Revenue: <strong>₹{{ total_revenue|floatformat:2 }}</strong>
             </span>
         </div>
@@ -62,45 +50,54 @@
 <div class="card card-custom overflow-hidden mb-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr class="text-uppercase small text-muted">
+            <thead class="table-light dark:table-dark small text-uppercase">
+                <tr>
                     <th class="ps-4">ID</th>
                     <th>License Plate</th>
-                    <th>Type</th>
-                    <th>Check-in Time</th>
-                    <th>Check-out Time</th>
+                    <th>Category</th>
+                    <th>Floor & Bay</th>
+                    <th>Check-In</th>
+                    <th>Check-Out</th>
                     <th>Duration</th>
                     <th>Status</th>
-                    <th>Billed Fee</th>
-                    <th class="text-end pe-4">CRUD Actions</th>
+                    <th>Itemized Fee</th>
+                    <th class="text-end pe-4">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for vehicle in vehicles %}
                 <tr>
-                    <td class="ps-4 text-muted small">#{{ vehicle.id }}</td>
+                    <td class="ps-4 text-muted small font-monospace">#{{ vehicle.id }}</td>
                     <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-car-front text-primary"></i>
-                            <span class="fw-bold text-primary">{{ vehicle.license_plate }}</span>
-                        </div>
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-2 py-1">
-                            {{ vehicle.vehicle_type }}
-                        </span>
-                    </td>
-                    <td class="small">{{ vehicle.entry_time|date:"M d, Y - h:i A" }}</td>
-                    <td class="small">
-                        {% if vehicle.exit_time %}
-                            {{ vehicle.exit_time|date:"M d, Y - h:i A" }}
-                        {% else %}
-                            <span class="text-muted fst-italic">Still Parked</span>
+                        <span class="font-monospace fw-bold fs-6 text-primary">{{ vehicle.license_plate }}</span>
+                        {% if vehicle.is_ev %}
+                            <span class="badge ev-badge ms-1 small">⚡ EV</span>
                         {% endif %}
                     </td>
                     <td>
-                        <span class="badge bg-body-secondary text-body rounded-pill px-2 py-1 small">
-                            <i class="bi bi-clock me-1"></i> {{ vehicle.duration_display }}
+                        <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1">
+                            {{ vehicle.vehicle_type }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if vehicle.slot %}
+                            <span class="badge bg-dark font-monospace">{{ vehicle.slot.slot_number }}</span>
+                            <span class="small text-muted">({{ vehicle.slot.floor.code }})</span>
+                        {% else %}
+                            <span class="text-muted small">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ vehicle.entry_time|date:"d M, H:i" }}</td>
+                    <td class="small">
+                        {% if vehicle.exit_time %}
+                            {{ vehicle.exit_time|date:"d M, H:i" }}
+                        {% else %}
+                            <span class="text-muted fst-italic">Parked</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border rounded-pill px-2 py-1 small font-monospace">
+                            {{ vehicle.duration_display }}
                         </span>
                     </td>
                     <td>
@@ -116,25 +113,29 @@
                     </td>
                     <td>
                         {% if vehicle.status == 'Exited' %}
-                            <strong class="text-success">₹{{ vehicle.fee|floatformat:2 }}</strong>
+                            <div class="fw-bold text-success font-monospace">₹{{ vehicle.fee|floatformat:2 }}</div>
+                            {% if vehicle.ev_charging_fee > 0 %}
+                                <div class="small text-muted" style="font-size: 0.72rem;">(Pkg: ₹{{ vehicle.parking_fee|floatformat:0 }} + EV: ₹{{ vehicle.ev_charging_fee|floatformat:0 }})</div>
+                            {% endif %}
                         {% else %}
-                            <span class="text-muted small">Pending exit</span>
+                            <span class="text-muted small">&mdash;</span>
                         {% endif %}
                     </td>
                     <td class="text-end pe-4">
                         <div class="btn-group btn-group-sm">
-                            <!-- Update: Edit Vehicle -->
-                            <a href="{% url 'edit_vehicle' vehicle.id %}?next=history" class="btn btn-outline-secondary" title="Edit Vehicle Details (Update)">
+                            {% if vehicle.status == 'Exited' %}
+                                <a href="{% url 'receipt_view' vehicle.id %}" class="btn btn-outline-primary" title="Print Tax Invoice">
+                                    <i class="bi bi-receipt"></i>
+                                </a>
+                            {% else %}
+                                <a href="{% url 'exit_vehicle' vehicle.id %}" class="btn btn-outline-success" title="Checkout & Bill Vehicle" onclick="return confirm('Checkout {{ vehicle.license_plate }} and compute fee?');">
+                                    <i class="bi bi-box-arrow-right"></i>
+                                </a>
+                            {% endif %}
+                            <a href="{% url 'edit_vehicle' vehicle.id %}" class="btn btn-outline-secondary" title="Edit Vehicle Details">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <!-- Update: Checkout & Bill if parked -->
-                            {% if vehicle.status == 'Parked' %}
-                            <a href="{% url 'exit_vehicle' vehicle.id %}?next=history" class="btn btn-outline-success" title="Checkout & Bill Vehicle" onclick="return confirm('Checkout {{ vehicle.license_plate }} and compute fee?');">
-                                <i class="bi bi-box-arrow-right"></i>
-                            </a>
-                            {% endif %}
-                            <!-- Delete: Void / Remove entry -->
-                            <a href="{% url 'delete_vehicle' vehicle.id %}?next=history" class="btn btn-outline-danger" title="Delete Vehicle Record (Delete)" onclick="return confirm('WARNING: Are you sure you want to permanently delete record for {{ vehicle.license_plate }}? This cannot be undone.');">
+                            <a href="{% url 'delete_vehicle' vehicle.id %}" class="btn btn-outline-danger" title="Delete Vehicle Record" onclick="return confirm('Delete record for {{ vehicle.license_plate }}?');">
                                 <i class="bi bi-trash"></i>
                             </a>
                         </div>
@@ -142,7 +143,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center py-5 text-muted">
+                    <td colspan="10" class="text-center py-5 text-muted">
                         <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary"></i>
                         No vehicle records matching the filter criteria.
                     </td>

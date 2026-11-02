@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Tax Invoice #{{ invoice_num }} | ParkSmart Pro Enterprise{% endblock %}
+
+{% block extra_css %}
+<style>
+    .receipt-card {
+        max-width: 420px;
+        margin: 0 auto;
+        background: #ffffff;
+        color: #111827;
+        font-family: 'JetBrains Mono', monospace;
+        border: 1px dashed #cbd5e1;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        padding: 24px;
+        border-radius: 8px;
+    }
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        .receipt-card, .receipt-card * {
+            visibility: visible;
+        }
+        .receipt-card {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            max-width: 100%;
+            border: none;
+            box-shadow: none;
+            padding: 0;
+        }
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-3">
+    <div class="col-12 col-md-8 col-lg-6">
+        <!-- Actions Strip -->
+        <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+            <a href="{% url 'operator_terminal' %}" class="btn btn-outline-secondary rounded-pill btn-sm">
+                <i class="bi bi-arrow-left me-1"></i> Back to Terminal
+            </a>
+            <button onclick="window.print()" class="btn btn-primary rounded-pill btn-sm fw-bold px-3">
+                <i class="bi bi-printer-fill me-1"></i> Print 80mm Receipt
+            </button>
+        </div>
+
+        <!-- Thermal Receipt Body -->
+        <div class="receipt-card">
+            <!-- Header -->
+            <div class="text-center mb-3">
+                <h5 class="fw-bold mb-1 text-uppercase tracking-wider">PARKSMART PRO</h5>
+                <div class="small fw-semibold">{{ settings.facility_name }}</div>
+                <div class="small text-muted">GSTIN: 05AAACP1234F1Z8 &bull; Gate #1 Egress</div>
+                <div class="small text-muted">{{ print_time|date:"d M Y &bull; H:i:s" }}</div>
+            </div>
+
+            <div class="border-top border-bottom border-secondary py-2 my-2 text-center">
+                <div class="fw-bold">{{ invoice_num }}</div>
+                <div class="small text-uppercase text-muted">Commercial Parking & EV Power Bill</div>
+            </div>
+
+            <!-- Vehicle & Slot Info -->
+            <div class="py-2 small">
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">License Plate:</span>
+                    <strong class="fs-6">{{ vehicle.license_plate }}</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Vehicle Type:</span>
+                    <span>{{ vehicle.vehicle_type }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Floor & Bay:</span>
+                    <span>{{ vehicle.slot.slot_number|default:"Dedicated Bay" }} ({{ vehicle.slot.floor.code|default:"Facility" }})</span>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Check-In Time:</span>
+                    <span>{{ vehicle.entry_time|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Check-Out Time:</span>
+                    <span>{{ vehicle.exit_time|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Duration Billed:</span>
+                    <strong>{{ vehicle.duration_display }} ({{ vehicle.duration_hours }}h)</strong>
+                </div>
+            </div>
+
+            <!-- Itemized Charge Breakdown -->
+            <div class="border-top border-secondary pt-2 mt-2 small">
+                <div class="fw-bold text-uppercase mb-2">Itemized Charges</div>
+                <div class="d-flex justify-content-between py-1">
+                    <span>Parking Fee ({{ vehicle.duration_hours }}h @ ₹{{ settings.hourly_rate }}/h):</span>
+                    <span>₹{{ vehicle.parking_fee|floatformat:2 }}</span>
+                </div>
+
+                {% if vehicle.ev_charging_fee > 0 or ev_session %}
+                    <div class="d-flex justify-content-between py-1">
+                        <span>EV Energy ({{ ev_session.energy_kwh|default:"18.5" }} kWh @ ₹{{ settings.ev_rate_per_kwh }}/kWh):</span>
+                        <span>₹{{ vehicle.ev_charging_fee|floatformat:2 }}</span>
+                    </div>
+                {% endif %}
+
+                <div class="d-flex justify-content-between py-1 text-muted">
+                    <span>Included GST (18%):</span>
+                    <span>₹{{ vehicle.fee|floatformat:2|default:"0.00" }}</span>
+                </div>
+            </div>
+
+            <!-- Total Invoice -->
+            <div class="border-top border-dark border-2 pt-2 mt-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold fs-6">TOTAL PAID:</span>
+                    <span class="fw-bold fs-4">₹{{ vehicle.fee|floatformat:2 }}</span>
+                </div>
+                <div class="small text-muted text-end">Payment Mode: Fastag / UPI Auto-Debited</div>
+            </div>
+
+            <!-- Barcode Graphic Simulation -->
+            <div class="text-center mt-4 pt-2 border-top border-dashed">
+                <div class="small text-muted mb-1">SCAN FOR DIGITAL RECEIPT</div>
+                <div class="d-inline-block bg-dark text-white p-2 rounded small">
+                    ||| | ||||| || |||| |||||| || | |||| ||
+                </div>
+                <div class="small text-muted mt-2">
+                    Operator: {{ settings.operator_name }}<br>
+                    Thank you for choosing ParkSmart Pro!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

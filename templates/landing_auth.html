@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}Authentication & Stakeholder Launchpad | ParkSmart Pro Enterprise{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center pt-2 pb-5">
+    <!-- Hero Header -->
+    <div class="col-12 text-center mb-5">
+        <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 mb-3 fw-semibold small">
+            <span class="pulse-indicator"></span> Enterprise Parking Infrastructure & EV Automation
+        </div>
+        <h1 class="display-5 fw-extrabold tracking-tight mb-2">
+            Welcome to <span class="text-primary">ParkSmart Pro</span>
+        </h1>
+        <p class="lead text-muted mx-auto" style="max-width: 760px;">
+            Select your stakeholder workstation below to enter the system, or sign in with your corporate enterprise credentials.
+        </p>
+
+        <!-- Live Facility Badges -->
+        <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+            <div class="card card-custom px-3 py-2 d-flex flex-row align-items-center gap-2">
+                <i class="bi bi-layers-fill text-primary fs-5"></i>
+                <div class="text-start">
+                    <div class="text-muted small">Multi-Level Car Bays</div>
+                    <div class="fw-bold">{{ total_slots }} Slots (4 Floors)</div>
+                </div>
+            </div>
+            <div class="card card-custom px-3 py-2 d-flex flex-row align-items-center gap-2">
+                <i class="bi bi-car-front-fill text-success fs-5"></i>
+                <div class="text-start">
+                    <div class="text-muted small">Currently Parked</div>
+                    <div class="fw-bold">{{ active_count }} Active Vehicles</div>
+                </div>
+            </div>
+            <div class="card card-custom px-3 py-2 d-flex flex-row align-items-center gap-2">
+                <i class="bi bi-lightning-charge-fill text-warning fs-5"></i>
+                <div class="text-start">
+                    <div class="text-muted small">EV Smart Hub</div>
+                    <div class="fw-bold">{{ ev_active_count }} Charging Active</div>
+                </div>
+            </div>
+            <div class="card card-custom px-3 py-2 d-flex flex-row align-items-center gap-2">
+                <i class="bi bi-shield-check text-info fs-5"></i>
+                <div class="text-start">
+                    <div class="text-muted small">Error Prevention</div>
+                    <div class="fw-bold">Poka-Yoke RTO Engine</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stakeholder Workstation Portals (5 Grid Cards) -->
+    <div class="col-12 mb-5">
+        <div class="text-center mb-4">
+            <h3 class="fw-bold"><i class="bi bi-people-fill text-primary me-2"></i>Select Your Role & Workstation</h3>
+            <p class="text-muted small">Click any stakeholder card below for 1-Click instant workstation launch</p>
+        </div>
+
+        <div class="row g-4 row-cols-1 row-cols-md-2 row-cols-xl-5">
+            <!-- 1. Admin / Owner -->
+            <div class="col">
+                <div class="card card-custom card-hover h-100 border-top border-4 border-dark">
+                    <div class="card-body d-flex flex-column text-center p-4">
+                        <div class="stat-icon-wrapper bg-dark text-white mx-auto mb-3">
+                            <i class="bi bi-person-fill-gear"></i>
+                        </div>
+                        <h5 class="fw-bold mb-1">Admin / Owner</h5>
+                        <span class="badge bg-dark bg-opacity-75 mb-3">System Administration</span>
+                        <p class="text-muted small flex-grow-1 text-start">
+                            Full executive control, staff account management, database backups, audit trail, and gross revenue reconciliation.
+                        </p>
+                        <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
+                            <span class="text-muted">User:</span> admin<br>
+                            <span class="text-muted">Pass:</span> admin123
+                        </div>
+                        <a href="{% url 'quick_persona_login' 'admin' %}" class="btn btn-dark w-100 rounded-pill fw-semibold py-2">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Admin
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Operations Manager -->
+            <div class="col">
+                <div class="card card-custom card-hover h-100 border-top border-4 border-success">
+                    <div class="card-body d-flex flex-column text-center p-4">
+                        <div class="stat-icon-wrapper bg-success bg-opacity-10 text-success mx-auto mb-3">
+                            <i class="bi bi-briefcase-fill"></i>
+                        </div>
+                        <h5 class="fw-bold mb-1">Operations Manager</h5>
+                        <span class="badge bg-success bg-opacity-75 mb-3">Facility Oversight</span>
+                        <p class="text-muted small flex-grow-1 text-start">
+                            Multi-floor capacity heatmaps, hourly parking tariffs, EV charging kWh pricing, and revenue analytics.
+                        </p>
+                        <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
+                            <span class="text-muted">User:</span> manager<br>
+                            <span class="text-muted">Pass:</span> manager123
+                        </div>
+                        <a href="{% url 'quick_persona_login' 'manager' %}" class="btn btn-success w-100 rounded-pill fw-semibold py-2">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Manager
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Gate Operator / Cashier -->
+            <div class="col">
+                <div class="card card-custom card-hover h-100 border-top border-4 border-primary">
+                    <div class="card-body d-flex flex-column text-center p-4">
+                        <div class="stat-icon-wrapper bg-primary bg-opacity-10 text-primary mx-auto mb-3">
+                            <i class="bi bi-display"></i>
+                        </div>
+                        <h5 class="fw-bold mb-1">Gate Operator</h5>
+                        <span class="badge bg-primary bg-opacity-75 mb-3">Entry & Cashier POS</span>
+                        <p class="text-muted small flex-grow-1 text-start">
+                            High-speed vehicle check-in with Poka-Yoke RTO verification, smart bay allocation, checkout & POS billing.
+                        </p>
+                        <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
+                            <span class="text-muted">User:</span> operator<br>
+                            <span class="text-muted">Pass:</span> operator123
+                        </div>
+                        <a href="{% url 'quick_persona_login' 'operator' %}" class="btn btn-primary w-100 rounded-pill fw-semibold py-2">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Terminal
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Security Guard -->
+            <div class="col">
+                <div class="card card-custom card-hover h-100 border-top border-4 border-warning">
+                    <div class="card-body d-flex flex-column text-center p-4">
+                        <div class="stat-icon-wrapper bg-warning bg-opacity-10 text-warning mx-auto mb-3">
+                            <i class="bi bi-shield-lock-fill"></i>
+                        </div>
+                        <h5 class="fw-bold mb-1">Security Guard</h5>
+                        <span class="badge bg-warning text-dark mb-3">Gate Access & Patrol</span>
+                        <p class="text-muted small flex-grow-1 text-start">
+                            Simulated ingress/egress barrier toggles, license plate scanner lookup, and security incident dispatch.
+                        </p>
+                        <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
+                            <span class="text-muted">User:</span> guard<br>
+                            <span class="text-muted">Pass:</span> guard123
+                        </div>
+                        <a href="{% url 'quick_persona_login' 'guard' %}" class="btn btn-warning text-dark w-100 rounded-pill fw-semibold py-2">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Guard
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Customer / Driver -->
+            <div class="col">
+                <div class="card card-custom card-hover h-100 border-top border-4 border-info">
+                    <div class="card-body d-flex flex-column text-center p-4">
+                        <div class="stat-icon-wrapper bg-info bg-opacity-10 text-info mx-auto mb-3">
+                            <i class="bi bi-geo-alt-fill"></i>
+                        </div>
+                        <h5 class="fw-bold mb-1">Customer / Driver</h5>
+                        <span class="badge bg-info text-dark mb-3">Driver Self-Service</span>
+                        <p class="text-muted small flex-grow-1 text-start">
+                            "Find My Car" locator, live floor vacancy explorer, real-time EV battery charging gauge, and e-receipt download.
+                        </p>
+                        <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
+                            <span class="text-muted">Access:</span> Public / Guest<br>
+                            <span class="text-muted">User:</span> customer
+                        </div>
+                        <a href="{% url 'customer_portal' %}" class="btn btn-info text-dark w-100 rounded-pill fw-semibold py-2">
+                            <i class="bi bi-search me-1"></i> Open Portal
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Corporate Credential Sign-In Form -->
+    <div class="col-12 col-md-8 col-lg-5">
+        <div class="card card-custom">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <i class="bi bi-key-fill text-primary fs-4"></i>
+                    <h5 class="fw-bold mb-0">Corporate Enterprise Sign-In</h5>
+                </div>
+                <p class="text-muted small mb-4">
+                    Enter your staff credentials to access your assigned workstation:
+                </p>
+
+                <form method="POST" action="{% url 'landing_auth' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="login_action" value="1">
+                    
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label small fw-semibold text-muted">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" name="username" id="id_username" class="form-control" placeholder="e.g. operator, manager, admin" required autofocus>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="id_password" class="form-label small fw-semibold text-muted">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input type="password" name="password" id="id_password" class="form-control" placeholder="••••••••" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 rounded-pill fw-bold">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to Workstation
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

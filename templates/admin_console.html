@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin / Owner Console | ParkSmart Pro Enterprise{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Header -->
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 bg-white dark:bg-slate-900 card-custom p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon-wrapper bg-dark text-white">
+                    <i class="bi bi-person-fill-gear"></i>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-0">System Admin & Executive Console</h4>
+                    <span class="text-muted small">Global User Access Controls, Database Diagnostics & Facility Architecture</span>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/admin/" target="_blank" class="btn btn-outline-dark btn-sm rounded-pill fw-bold">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Django Superuser Admin
+                </a>
+                <a href="{% url 'api_reset_seed' %}" class="btn btn-outline-danger btn-sm rounded-pill fw-bold" onclick="return confirm('Reset and re-seed database with commercial demo records?');">
+                    <i class="bi bi-arrow-repeat me-1"></i> Re-Seed Demo Data
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Diagnostics Metrics -->
+    <div class="col-12">
+        <div class="row g-3 row-cols-1 row-cols-sm-2 row-cols-xl-4">
+            <div class="col">
+                <div class="card card-custom p-3 h-100">
+                    <span class="text-muted small text-uppercase fw-bold">Active Staff Users</span>
+                    <div class="display-6 fw-extrabold text-primary">{{ total_users }}</div>
+                    <div class="small text-muted mt-1">Role-Based Access Control</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-custom p-3 h-100">
+                    <span class="text-muted small text-uppercase fw-bold">Multi-Floor Capacity</span>
+                    <div class="display-6 fw-extrabold text-success">{{ total_slots }} <span class="fs-6">Bays</span></div>
+                    <div class="small text-muted mt-1">B1, Ground, F1, F2</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-custom p-3 h-100">
+                    <span class="text-muted small text-uppercase fw-bold">Total Vehicle Records</span>
+                    <div class="display-6 fw-extrabold text-dark dark:text-light">{{ total_vehicles }}</div>
+                    <div class="small text-muted mt-1">Active + Historical</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-custom p-3 h-100">
+                    <span class="text-muted small text-uppercase fw-bold">Security Logs Dispatched</span>
+                    <div class="display-6 fw-extrabold text-warning">{{ total_incidents }}</div>
+                    <div class="small text-muted mt-1">Patrol Audits</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Accounts & Access Control -->
+    <div class="col-12 col-lg-8">
+        <div class="card card-custom h-100">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0"><i class="bi bi-people-fill text-primary me-2"></i>Enterprise Staff Credentials</h5>
+                <span class="badge bg-secondary rounded-pill">{{ users|length }} Stakeholder Accounts</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light dark:table-dark small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Username</th>
+                                <th>Role / Full Name</th>
+                                <th>Permissions</th>
+                                <th>Status</th>
+                                <th class="text-end pe-4">Direct Workstation Access</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                                <tr>
+                                    <td class="ps-4 font-monospace fw-bold">{{ u.username }}</td>
+                                    <td>{{ u.first_name|default:u.username|capfirst }}</td>
+                                    <td>
+                                        {% if u.is_superuser %}
+                                            <span class="badge bg-danger">Superuser (Owner)</span>
+                                        {% elif u.is_staff %}
+                                            <span class="badge bg-success">Staff / Manager</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Operator / Guard</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle"></i> Active</span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <a href="{% url 'quick_persona_login' u.username %}" class="btn btn-sm btn-outline-primary rounded-pill fw-semibold">
+                                            Launch Workstation <i class="bi bi-box-arrow-in-right ms-1"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Architecture & Environment Info -->
+    <div class="col-12 col-lg-4">
+        <div class="card card-custom h-100">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 px-4">
+                <h5 class="fw-bold mb-0"><i class="bi bi-cpu text-info me-2"></i>System Architecture</h5>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="list-group list-group-flush small">
+                    <div class="list-group-item d-flex justify-content-between px-0 bg-transparent">
+                        <span class="text-muted">Core Framework:</span>
+                        <strong>Django 5.x + Python 3.11</strong>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between px-0 bg-transparent">
+                        <span class="text-muted">Database Engine:</span>
+                        <strong>SQLite3 (ACID Compliant)</strong>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between px-0 bg-transparent">
+                        <span class="text-muted">Validation Layer:</span>
+                        <strong class="text-success">Poka-Yoke RTO v2.4</strong>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between px-0 bg-transparent">
+                        <span class="text-muted">UI Architecture:</span>
+                        <strong>Bootstrap 5.3 + Responsive Grid</strong>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between px-0 bg-transparent">
+                        <span class="text-muted">EV Charging Telemetry:</span>
+                        <strong class="text-info">Smart Charger 7.2 kW Hub</strong>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between px-0 bg-transparent">
+                        <span class="text-muted">Active Building Levels:</span>
+                        <strong>4 Floors (B1, G, F1, F2)</strong>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-2">
+                    <a href="{% url 'profile_settings' %}" class="btn btn-primary w-100 rounded-pill fw-bold">
+                        <i class="bi bi-gear-fill me-1"></i> Global Facility Configuration
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

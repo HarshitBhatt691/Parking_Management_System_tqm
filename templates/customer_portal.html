@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block title %}Driver Self-Service Portal | ParkSmart Pro Enterprise{% endblock %}
+
+{% block extra_css %}
+<style>
+    .battery-container {
+        position: relative;
+        width: 140px;
+        height: 60px;
+        border: 4px solid #10b981;
+        border-radius: 12px;
+        padding: 4px;
+        margin: 0 auto;
+    }
+    .battery-container::after {
+        content: '';
+        position: absolute;
+        right: -12px;
+        top: 16px;
+        width: 6px;
+        height: 20px;
+        background: #10b981;
+        border-radius: 0 4px 4px 0;
+    }
+    .battery-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #06b6d4);
+        border-radius: 6px;
+        transition: width 0.5s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4 justify-content-center">
+    <!-- Header -->
+    <div class="col-12 text-center pt-2">
+        <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-info bg-opacity-10 text-info border border-info border-opacity-25 mb-2 fw-semibold small">
+            <i class="bi bi-geo-alt-fill"></i> Driver Self-Service Station
+        </div>
+        <h2 class="fw-extrabold tracking-tight">Find My Car & Live EV Telemetry</h2>
+        <p class="text-muted small">Locate parked vehicle bay, check current accrued duration, and track live EV battery power.</p>
+    </div>
+
+    <!-- License Plate Search Form -->
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card card-custom shadow-sm">
+            <div class="card-body p-4">
+                <form method="GET" action="{% url 'customer_portal' %}" class="d-flex flex-column gap-2">
+                    <label for="plateInput" class="form-label fw-bold small text-muted">Enter Vehicle License Plate Number</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" 
+                               name="plate" 
+                               id="plateInput" 
+                               class="form-control text-uppercase font-monospace fw-bold" 
+                               placeholder="e.g. UK-04-AK-5521 or UK-04-EV-2024" 
+                               value="{{ query }}"
+                               required autofocus>
+                        <button type="submit" class="btn btn-primary px-4 fw-bold">
+                            Locate Car
+                        </button>
+                    </div>
+                    <div class="form-text small text-muted">
+                        Tip: You can search test cars like <a href="{% url 'customer_portal' %}?plate=UK-04-EV-2024" class="text-decoration-none fw-bold">UK-04-EV-2024</a> (EV) or <a href="{% url 'customer_portal' %}?plate=UK-04-AK-5521" class="text-decoration-none fw-bold">UK-04-AK-5521</a> (SUV).
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Result Card -->
+    {% if vehicle %}
+        <div class="col-12 col-md-10 col-lg-8">
+            <div class="card card-custom border-top border-4 border-primary">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 pb-3 border-bottom">
+                        <div>
+                            <span class="badge bg-primary fs-6 px-3 py-1 font-monospace">{{ vehicle.license_plate }}</span>
+                            {% if vehicle.is_ev %}
+                                <span class="badge ev-badge fs-6 px-3 py-1 ms-1"><i class="bi bi-lightning-charge-fill"></i> Electric Vehicle</span>
+                            {% endif %}
+                            <h4 class="fw-bold mt-2 mb-0">{{ vehicle.vehicle_type }}</h4>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge {% if vehicle.status == 'Parked' %}bg-success{% else %}bg-secondary{% endif %} px-3 py-2 fs-6">
+                                <i class="bi bi-check-circle me-1"></i> {{ vehicle.status|upper }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <!-- Bay Location Card -->
+                        <div class="col-12 col-md-6">
+                            <div class="p-3 rounded bg-light dark:bg-slate-800 h-100">
+                                <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="bi bi-geo-fill text-danger me-1"></i>Allotted Parking Bay</h6>
+                                <div class="display-6 fw-extrabold text-primary font-monospace mb-1">
+                                    {{ vehicle.slot.slot_number|default:"B1-EV-01" }}
+                                </div>
+                                <div class="fw-bold fs-5">
+                                    {{ vehicle.slot.floor.name|default:"Basement Level B1 (EV Hub)" }}
+                                </div>
+                                <div class="text-muted small mt-2">
+                                    Follow directional signage towards <strong>{{ vehicle.slot.floor.code|default:"B1" }}</strong> section.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Timing & Billed Estimate -->
+                        <div class="col-12 col-md-6">
+                            <div class="p-3 rounded bg-light dark:bg-slate-800 h-100">
+                                <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="bi bi-clock-history text-primary me-1"></i>Session Duration</h6>
+                                <div class="fs-4 fw-bold font-monospace mb-1">
+                                    {{ vehicle.duration_display }}
+                                </div>
+                                <div class="small text-muted mb-2">
+                                    Checked In: {{ vehicle.entry_time|date:"d M Y &bull; H:i" }}
+                                </div>
+                                <div class="border-top pt-2">
+                                    <span class="text-muted small">Rate: ₹{{ settings.hourly_rate }}/hr</span>
+                                    {% if vehicle.status == 'Exited' %}
+                                        <div class="fw-bold fs-5 text-success">Total Paid: ₹{{ vehicle.fee|floatformat:2 }}</div>
+                                    {% else %}
+                                        <div class="fw-bold fs-5 text-primary">Accrued Parking: ₹{{ vehicle.duration_hours|default:1 }}h &times; ₹{{ settings.hourly_rate }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- EV Battery Charging Telemetry (If EV) -->
+                        {% if vehicle.is_ev or ev_session %}
+                            <div class="col-12">
+                                <div class="p-4 rounded border border-info border-opacity-25 bg-info bg-opacity-10 text-center">
+                                    <h5 class="fw-bold text-info mb-3">
+                                        <i class="bi bi-lightning-charge-fill"></i> Live EV Fast Charger Telemetry
+                                    </h5>
+
+                                    <div class="d-flex flex-wrap justify-content-center align-items-center gap-4">
+                                        <div>
+                                            <div class="battery-container">
+                                                <div class="battery-fill" style="width: {{ ev_session.battery_percentage|default:75 }}%;"></div>
+                                            </div>
+                                            <div class="fw-bold fs-4 text-success mt-2">{{ ev_session.battery_percentage|default:75 }}% Charged</div>
+                                        </div>
+
+                                        <div class="text-start">
+                                            <div class="small text-muted">Charging Station State:</div>
+                                            <div class="fw-bold fs-6 text-primary"><span class="pulse-indicator bg-info"></span> {{ ev_session.status|default:"Actively Charging" }}</div>
+                                            <div class="small text-muted mt-2">Energy Delivered:</div>
+                                            <div class="fw-bold fs-5 font-monospace">{{ ev_session.energy_kwh|default:"18.5" }} kWh</div>
+                                            <div class="small text-muted mt-1">Charging Tariff: ₹{{ settings.ev_rate_per_kwh }}/kWh</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Receipt Button -->
+                    <div class="mt-4 text-center">
+                        {% if vehicle.status == 'Exited' %}
+                            <a href="{% url 'receipt_view' vehicle.id %}" class="btn btn-outline-primary rounded-pill px-4 fw-bold">
+                                <i class="bi bi-receipt me-1"></i> View Tax Invoice / E-Receipt
+                            </a>
+                        {% else %}
+                            <div class="text-muted small">
+                                <i class="bi bi-info-circle me-1"></i> Active vehicle session. Thermal invoice will be generated upon checkout at gate egress.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% elif search_error %}
+        <div class="col-12 col-md-8 text-center">
+            <div class="alert alert-warning card-custom border-0 shadow-sm py-4">
+                <i class="bi bi-exclamation-triangle-fill fs-2 text-warning d-block mb-2"></i>
+                <h5 class="fw-bold mb-1">Vehicle Not Found</h5>
+                <p class="mb-0 text-muted">{{ search_error }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Multi-Floor Vacancy Explorer for Public Drivers -->
+    <div class="col-12 col-md-10 col-lg-8 mt-2">
+        <div class="card card-custom">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 px-4 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-building text-primary fs-5"></i>
+                    <h5 class="fw-bold mb-0">Live Multi-Level Parking Vacancy</h5>
+                </div>
+                <span class="badge bg-success-subtle text-success">Real-Time Sensor Feed</span>
+            </div>
+
+            <div class="card-body px-4 pb-4">
+                <div class="row g-3">
+                    {% for floor in floors %}
+                        <div class="col-12 col-md-6">
+                            <div class="p-3 rounded border bg-light dark:bg-slate-800 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge {% if floor.is_ev_enabled %}bg-success{% else %}bg-primary{% endif %} mb-1 font-monospace">{{ floor.code }}</span>
+                                    <div class="fw-bold">{{ floor.name }}</div>
+                                    <div class="small text-muted">
+                                        {% if floor.is_ev_enabled %}<i class="bi bi-lightning-charge-fill text-warning"></i> EV Fast Bays Available{% else %}Standard / SUV Parking{% endif %}
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fs-4 fw-extrabold {% if floor.available_count > 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ floor.available_count }}
+                                    </div>
+                                    <div class="small text-muted">Free / {{ floor.total_slots }} Total</div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
