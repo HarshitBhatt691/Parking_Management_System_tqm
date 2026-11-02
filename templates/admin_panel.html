@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Alert Messages -->
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show card-custom shadow-sm border-0 d-flex align-items-center mb-4" role="alert">
+            <i class="bi {% if message.tags == 'error' %}bi-slash-circle-fill text-danger{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill text-warning{% else %}bi-check-circle-fill text-success{% endif %} fs-5 me-2"></i>
+            <div>{{ message }}</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<!-- Admin Header -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h2 class="fw-bold mb-0 text-body-emphasis">👑 Facility Administration Console</h2>
+            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-1 rounded-pill">
+                <i class="bi bi-shield-lock-fill me-1"></i> RBAC Security Level 1
+            </span>
+        </div>
+        <small class="text-muted">User authentication management, workstation personas, and operational governance</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/admin/" target="_blank" class="btn btn-outline-primary rounded-pill px-3 py-2 shadow-sm d-flex align-items-center gap-2">
+            <i class="bi bi-database-fill-gear"></i>
+            <span>Django Native Admin</span>
+            <i class="bi bi-box-arrow-up-right small"></i>
+        </a>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-3 py-2 shadow-sm">
+            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- 4 Telemetry / Governance KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-custom p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-muted small fw-bold text-uppercase">Total Users</span>
+                <div class="stat-icon-wrapper bg-primary-subtle text-primary">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+            </div>
+            <h2 class="fw-bold mb-1 text-body-emphasis">{{ total_users }} <span class="fs-6 fw-normal text-muted">Accounts</span></h2>
+            <div class="small text-muted">
+                {{ admin_count }} Admins &bull; {{ operator_count }} Gate Operators
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-custom p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-muted small fw-bold text-uppercase">Active Lot Load</span>
+                <div class="stat-icon-wrapper bg-warning-subtle text-warning">
+                    <i class="bi bi-car-front-fill"></i>
+                </div>
+            </div>
+            <h2 class="fw-bold mb-1 text-body-emphasis">{{ active_in_lot }} <span class="fs-6 fw-normal text-muted">Parked</span></h2>
+            <div class="small text-muted">
+                From {{ total_vehicles }} total recorded vehicle sessions
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-custom p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-muted small fw-bold text-uppercase">Gross Revenue</span>
+                <div class="stat-icon-wrapper bg-success-subtle text-success">
+                    <i class="bi bi-wallet2"></i>
+                </div>
+            </div>
+            <h2 class="fw-bold mb-1 text-body-emphasis">₹{{ total_revenue|floatformat:2 }}</h2>
+            <div class="small text-success">
+                <i class="bi bi-check-circle"></i> Reconciled via duration billing
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card card-custom p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-muted small fw-bold text-uppercase">Audit Integrity</span>
+                <div class="stat-icon-wrapper bg-info-subtle text-info">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+            </div>
+            <h2 class="fw-bold mb-1 text-body-emphasis">ACID / WAL</h2>
+            <div class="small text-muted">
+                SQLite3 write-ahead concurrency active
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: User & Staff Directory (8 cols) -->
+    <div class="col-lg-8">
+        <div class="card card-custom overflow-hidden mb-4">
+            <div class="card-header bg-body border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <h5 class="fw-bold mb-0 text-body-emphasis">Staff & Workstation User Accounts</h5>
+                    <span class="badge bg-primary rounded-pill">{{ total_users }}</span>
+                </div>
+                <small class="text-muted">Role-Based Access Governance</small>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr class="text-uppercase small text-muted">
+                            <th class="ps-4">Username</th>
+                            <th>Full Name</th>
+                            <th>Role & Permissions</th>
+                            <th>Status</th>
+                            <th>Last Login</th>
+                            <th class="text-end pe-4">Scope</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-icon-wrapper {% if u.is_staff or u.is_superuser %}bg-warning-subtle text-warning-emphasis{% else %}bg-info-subtle text-info-emphasis{% endif %}" style="width: 32px; height: 32px; font-size: 0.9rem;">
+                                        <i class="bi {% if u.is_staff or u.is_superuser %}bi-shield-lock-fill{% else %}bi-person-badge-fill{% endif %}"></i>
+                                    </div>
+                                    <strong>{{ u.username }}</strong>
+                                </div>
+                            </td>
+                            <td>{{ u.get_full_name|default:"--" }}</td>
+                            <td>
+                                {% if u.is_superuser %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-1">Super Admin</span>
+                                {% elif u.is_staff %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-1">Supervisor</span>
+                                {% else %}
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill px-2 py-1">Gate Operator</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                    <span class="badge bg-success-subtle text-success rounded-pill px-2 py-1">
+                                        <i class="bi bi-check-circle me-1"></i> Active
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1">Disabled</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">{{ u.last_login|date:"M d, h:i A"|default:"Never" }}</td>
+                            <td class="text-end pe-4">
+                                <span class="badge bg-body-secondary text-body-secondary small rounded-pill">
+                                    {% if u.is_staff %}Full Authority{% else %}Ingress / Billing Only{% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Create New Operator Account Form (4 cols) -->
+    <div class="col-lg-4">
+        <div class="card card-custom p-4 mb-4">
+            <h5 class="fw-bold mb-1 text-body-emphasis d-flex align-items-center gap-2">
+                <i class="bi bi-person-plus-fill text-primary"></i> Create Workstation Account
+            </h5>
+            <p class="text-muted small mb-3">Provision new gate operator or supervisor credentials.</p>
+
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Username</label>
+                    {{ form.username }}
+                    {% if form.username.errors %}<div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>{% endif %}
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-muted text-uppercase">First Name</label>
+                        {{ form.first_name }}
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-muted text-uppercase">Last Name</label>
+                        {{ form.last_name }}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Email Address</label>
+                    {{ form.email }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Initial Password</label>
+                    {{ form.password }}
+                    <small class="text-muted d-block mt-1">{{ form.password.help_text }}</small>
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                    {{ form.is_admin }}
+                    <label class="form-check-label small fw-semibold" for="{{ form.is_admin.id_for_label }}">
+                        Grant Supervisor / Admin Role
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 shadow-sm">
+                    <i class="bi bi-check-lg me-1"></i> Provision Account
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

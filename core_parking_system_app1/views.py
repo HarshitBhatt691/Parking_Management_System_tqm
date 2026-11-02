@@ -1,11 +1,112 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.db.models import Sum, Count, Q
 from .models import Vehicle, ProfileSettings
-from .forms import VehicleForm, ProfileSettingsForm
+from .forms import VehicleForm, ProfileSettingsForm, OperatorCreationForm
 from . import sqc_tools
 
 
+# ==========================================
+# AUTHENTICATION & PERSONA WORKSTATION VIEWS
+# ==========================================
+
+def login_view(request):
+    """Handles operator and admin login, including 1-click persona shortcuts for demonstrations."""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    # 1-Click Persona Demo Quick-Login (e.g. ?persona=admin or ?persona=operator)
+    persona = request.GET.get('persona', '').strip().lower()
+    if persona in ['admin', 'operator']:
+        username = persona
+        password = 'admin123' if persona == 'admin' else 'operator123'
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            role_label = "Supervisor / Admin" if user.is_staff else "Gate Operator"
+            messages.success(request, f"Welcome back, {user.get_full_name() or user.username}! Authenticated as {role_label}.")
+            next_url = request.GET.get('next', 'dashboard')
+            return redirect(next_url)
+
+    if request.method == 'POST':
+        u_name = request.POST.get('username', '').strip()
+        p_word = request.POST.get('password', '').strip()
+        user = authenticate(request, username=u_name, password=p_word)
+        if user is not None:
+            if user.is_active:
+                login(request, user)
+                role_label = "Supervisor / Admin" if user.is_staff else "Gate Operator"
+                messages.success(request, f"Logged in as {user.get_full_name() or user.username} ({role_label})")
+                next_url = request.GET.get('next', 'dashboard')
+                return redirect(next_url)
+            else:
+                messages.error(request, "Your account has been deactivated. Contact the facility supervisor.")
+        else:
+            messages.error(request, "Invalid username or password. Please try again.")
+
+    return render(request, 'login.html')
+
+
+@login_required(login_url='login')
+def logout_view(request):
+    """Safely logs out the active user and clears the session."""
+    username = request.user.username
+    logout(request)
+    messages.info(request, f"Operator session for '{username}' signed out successfully.")
+    return redirect('login')
+
+
+# ==========================================
+# SUPERVISOR / ADMIN MANAGEMENT CONSOLE
+# ==========================================
+
+@login_required(login_url='login')
+def admin_panel(request):
+    """Dedicated in-app Administrative Panel for user management, role governance & system health."""
+    if not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "Access Denied: You need Facility Admin privileges to access the Admin Console.")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        form = OperatorCreationForm(request.POST)
+        if form.is_valid():
+            new_user = form.save()
+            role = "Admin" if new_user.is_staff else "Gate Operator"
+            messages.success(request, f"Account '{new_user.username}' created successfully as {role}!")
+            return redirect('admin_panel')
+    else:
+        form = OperatorCreationForm()
+
+    users = User.objects.all().order_by('-date_joined')
+    total_users = users.count()
+    admin_count = users.filter(Q(is_staff=True) | Q(is_superuser=True)).count()
+    operator_count = total_users - admin_count
+    
+    total_vehicles = Vehicle.objects.count()
+    total_revenue = Vehicle.objects.filter(status='Exited').aggregate(Sum('fee'))['fee__sum'] or 0.00
+    active_in_lot = Vehicle.objects.filter(status='Parked').count()
+
+    context = {
+        'users': users,
+        'form': form,
+        'total_users': total_users,
+        'admin_count': admin_count,
+        'operator_count': operator_count,
+        'total_vehicles': total_vehicles,
+        'total_revenue': total_revenue,
+        'active_in_lot': active_in_lot,
+    }
+    return render(request, 'admin_panel.html', context)
+
+
+# ==========================================
+# CORE PARKING MANAGEMENT OPERATIONS
+# ==========================================
+
+@login_required(login_url='login')
 def dashboard(request):
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
     total_capacity = settings.total_capacity or 50
@@ -50,6 +151,7 @@ def dashboard(request):
 
 
 # CREATE (C)
+@login_required(login_url='login')
 def add_vehicle(request):
     if request.method == 'POST':
         form = VehicleForm(request.POST)
@@ -63,6 +165,7 @@ def add_vehicle(request):
 
 
 # UPDATE (U) - Modify vehicle details (fix typo in plate or type)
+@login_required(login_url='login')
 def edit_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     if request.method == 'POST':
@@ -70,7 +173,6 @@ def edit_vehicle(request, vehicle_id):
         if form.is_valid():
             form.save()
             messages.success(request, f"Vehicle details for {vehicle.license_plate} updated successfully!")
-            # Redirect to where the user came from (dashboard or history)
             next_url = request.GET.get('next', 'dashboard')
             return redirect(next_url)
     else:
@@ -78,17 +180,25 @@ def edit_vehicle(request, vehicle_id):
     return render(request, 'edit_vehicle.html', {'form': form, 'vehicle': vehicle})
 
 
-# DELETE (D) - Remove / Cancel accidental or cancelled entry
+# DELETE (D) - Remove / Cancel accidental or cancelled entry (Admin Protected)
+@login_required(login_url='login')
 def delete_vehicle(request, vehicle_id):
+    next_url = request.GET.get('next', 'dashboard')
+    
+    # RBAC Security Guard: Only Admins can permanently delete audit records
+    if not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "Permission Denied: Only Facility Supervisors / Admins have authority to void vehicle records (TQM Audit Protection).")
+        return redirect(next_url)
+
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     plate = vehicle.license_plate
     vehicle.delete()
-    messages.warning(request, f"Vehicle record {plate} has been permanently deleted from the database.")
-    next_url = request.GET.get('next', 'dashboard')
+    messages.warning(request, f"Vehicle record {plate} has been permanently deleted by {request.user.username}.")
     return redirect(next_url)
 
 
 # UPDATE (U) - Checkout & automated billing calculation
+@login_required(login_url='login')
 def exit_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, id=vehicle_id, status='Parked')
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
@@ -107,6 +217,7 @@ def exit_vehicle(request, vehicle_id):
 
 
 # READ (R) - Complete Parking History & Audit Log
+@login_required(login_url='login')
 def parking_history(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', 'all')
@@ -133,20 +244,29 @@ def parking_history(request):
 
 
 # Q08 Feature 5: Facility & Operator Settings
+@login_required(login_url='login')
 def profile_settings(request):
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
+    is_admin = request.user.is_staff or request.user.is_superuser
+    
     if request.method == 'POST':
+        if not is_admin:
+            messages.error(request, "Permission Denied: Only Admins can modify facility parameters and hourly billing rates.")
+            return redirect('profile_settings')
+
         form = ProfileSettingsForm(request.POST, instance=settings)
         if form.is_valid():
             form.save()
-            messages.success(request, "Operator and facility profile updated successfully!")
+            messages.success(request, "Facility configuration updated successfully!")
             return redirect('profile_settings')
     else:
         form = ProfileSettingsForm(instance=settings)
-    return render(request, 'profile_settings.html', {'form': form, 'settings': settings})
+        
+    return render(request, 'profile_settings.html', {'form': form, 'settings': settings, 'is_admin': is_admin})
 
 
 # Q08 Feature 2: Visual Reports (SQC Tools)
+@login_required(login_url='login')
 def sqc_reports(request):
     pareto_img = sqc_tools.get_pareto_chart()
     fishbone_img = sqc_tools.get_fishbone_diagram()

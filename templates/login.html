@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - ParkSmart TQM</title>
+    <!-- Google Font: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <style>
+        :root {
+            --app-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        body {
+            font-family: var(--app-font);
+            background-color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        [data-bs-theme="dark"] body {
+            background-color: #0f172a;
+        }
+        .card-custom {
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08);
+        }
+        [data-bs-theme="dark"] .card-custom {
+            background-color: #1e293b;
+            border-color: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
+        }
+        .persona-card {
+            border: 1.5px solid transparent;
+            border-radius: 1rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .persona-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--bs-primary);
+            box-shadow: 0 8px 20px -3px rgba(0, 0, 0, 0.1);
+        }
+        .stat-icon-wrapper {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-7 col-lg-5">
+                
+                <!-- Brand Header -->
+                <div class="text-center mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-primary-subtle text-primary rounded-circle mb-3" style="width: 64px; height: 64px; font-size: 2rem;">
+                        🅿️
+                    </div>
+                    <h3 class="fw-bold mb-1 text-body-emphasis">ParkSmart TQM</h3>
+                    <p class="text-muted small">Role-Based Access Control (RBAC) & Command Authentication</p>
+                </div>
+
+                <!-- Alert Messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show card-custom shadow-sm border-0 d-flex align-items-center mb-4" role="alert">
+                            <i class="bi bi-info-circle-fill fs-5 me-2"></i>
+                            <div class="small">{{ message }}</div>
+                            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <!-- Main Login Card -->
+                <div class="card card-custom p-4 p-sm-5 mb-4">
+                    <form method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.GET.next|default:'dashboard' }}">
+
+                        <div class="mb-3">
+                            <label for="usernameInput" class="form-label fw-bold small text-uppercase text-muted">Operator Username</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-body-secondary"><i class="bi bi-person-fill"></i></span>
+                                <input type="text" name="username" id="usernameInput" class="form-control" placeholder="Enter username (e.g. admin or operator)" required autofocus>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="passwordInput" class="form-label fw-bold small text-uppercase text-muted">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-body-secondary"><i class="bi bi-lock-fill"></i></span>
+                                <input type="password" name="password" id="passwordInput" class="form-control" placeholder="Enter password" required>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 fw-semibold shadow-sm mb-3">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to Workstation
+                        </button>
+                    </form>
+
+                    <!-- Divider -->
+                    <div class="position-relative text-center my-3">
+                        <hr class="text-muted">
+                        <span class="position-absolute top-50 start-50 translate-middle bg-body px-3 small text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">
+                            Live Demonstration Quick-Login
+                        </span>
+                    </div>
+
+                    <!-- 1-Click Workstation Personas -->
+                    <div class="d-flex flex-column gap-2 mt-2">
+                        <!-- Admin Persona Card -->
+                        <a href="{% url 'login' %}?persona=admin{% if request.GET.next %}&next={{ request.GET.next }}{% endif %}" class="persona-card p-3 bg-body-tertiary d-flex align-items-center gap-3 text-body">
+                            <div class="stat-icon-wrapper bg-warning-subtle text-warning-emphasis">
+                                <i class="bi bi-shield-lock-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="small">Supervisor / Admin</strong>
+                                    <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill small" style="font-size: 0.65rem;">Full Control</span>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.75rem;">
+                                    <code>admin</code> &bull; Settings, CRUD deletion, SQC audits & users
+                                </div>
+                            </div>
+                            <i class="bi bi-arrow-right text-muted"></i>
+                        </a>
+
+                        <!-- Gate Operator Persona Card -->
+                        <a href="{% url 'login' %}?persona=operator{% if request.GET.next %}&next={{ request.GET.next }}{% endif %}" class="persona-card p-3 bg-body-tertiary d-flex align-items-center gap-3 text-body">
+                            <div class="stat-icon-wrapper bg-info-subtle text-info-emphasis">
+                                <i class="bi bi-person-badge-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="small">Gate Operator</strong>
+                                    <span class="badge bg-info-subtle text-info-emphasis rounded-pill small" style="font-size: 0.65rem;">Fast Ingress</span>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.75rem;">
+                                    <code>operator</code> &bull; Vehicle check-in, 2D bay map & billing
+                                </div>
+                            </div>
+                            <i class="bi bi-arrow-right text-muted"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Theme Switcher & Footer Info -->
+                <div class="d-flex justify-content-between align-items-center px-3 text-muted small">
+                    <span>BBAT104: TQM Project</span>
+                    <button class="btn btn-sm btn-link text-muted text-decoration-none" id="themeToggleBtn">
+                        <i class="bi bi-moon-stars me-1"></i> Toggle Theme
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5.3 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const htmlElement = document.documentElement;
+        const themeBtn = document.getElementById('themeToggleBtn');
+        function applyTheme(theme) {
+            htmlElement.setAttribute('data-bs-theme', theme);
+            localStorage.setItem('parksmart_theme', theme);
+            if (theme === 'dark') {
+                themeBtn.innerHTML = '<i class="bi bi-sun-fill me-1"></i> Light Theme';
+            } else {
+                themeBtn.innerHTML = '<i class="bi bi-moon-stars-fill me-1"></i> Dark Theme';
+            }
+        }
+        const savedTheme = localStorage.getItem('parksmart_theme') || 'light';
+        applyTheme(savedTheme);
+        themeBtn.addEventListener('click', function() {
+            const current = htmlElement.getAttribute('data-bs-theme');
+            applyTheme(current === 'dark' ? 'light' : 'dark');
+        });
+    </script>
+</body>
+</html>
