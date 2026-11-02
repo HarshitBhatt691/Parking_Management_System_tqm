@@ -14,48 +14,42 @@ from . import sqc_tools
 # ==========================================
 
 def login_view(request):
-    """Handles operator and admin login, including 1-click persona shortcuts for demonstrations."""
+    """Strictly authenticates registered operators and admins with mandatory credentials."""
     if request.user.is_authenticated:
         return redirect('dashboard')
-
-    # 1-Click Persona Demo Quick-Login (e.g. ?persona=admin or ?persona=operator)
-    persona = request.GET.get('persona', '').strip().lower()
-    if persona in ['admin', 'operator']:
-        username = persona
-        password = 'admin123' if persona == 'admin' else 'operator123'
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            role_label = "Supervisor / Admin" if user.is_staff else "Gate Operator"
-            messages.success(request, f"Welcome back, {user.get_full_name() or user.username}! Authenticated as {role_label}.")
-            next_url = request.GET.get('next', 'dashboard')
-            return redirect(next_url)
 
     if request.method == 'POST':
         u_name = request.POST.get('username', '').strip()
         p_word = request.POST.get('password', '').strip()
+
+        if not u_name or not p_word:
+            messages.error(request, "Please enter both username and password.")
+            return render(request, 'login.html')
+
         user = authenticate(request, username=u_name, password=p_word)
         if user is not None:
             if user.is_active:
                 login(request, user)
-                role_label = "Supervisor / Admin" if user.is_staff else "Gate Operator"
-                messages.success(request, f"Logged in as {user.get_full_name() or user.username} ({role_label})")
-                next_url = request.GET.get('next', 'dashboard')
+                role_label = "Supervisor / Admin" if (user.is_staff or user.is_superuser) else "Gate Operator"
+                messages.success(request, f"Welcome, {user.get_full_name() or user.username}! Authenticated as {role_label}.")
+                next_url = request.POST.get('next') or request.GET.get('next') or 'dashboard'
                 return redirect(next_url)
             else:
-                messages.error(request, "Your account has been deactivated. Contact the facility supervisor.")
+                messages.error(request, "Access Denied: This account has been deactivated.")
         else:
-            messages.error(request, "Invalid username or password. Please try again.")
+            messages.error(request, "Access Denied: Invalid credentials. Only registered users can enter.")
 
     return render(request, 'login.html')
 
 
-@login_required(login_url='login')
 def logout_view(request):
-    """Safely logs out the active user and clears the session."""
-    username = request.user.username
+    """Safely logs out the active user and terminates the session."""
+    username = request.user.username if request.user.is_authenticated else ""
     logout(request)
-    messages.info(request, f"Operator session for '{username}' signed out successfully.")
+    if username:
+        messages.info(request, f"User session for '{username}' signed out successfully.")
+    else:
+        messages.info(request, "You have been signed out.")
     return redirect('login')
 
 
