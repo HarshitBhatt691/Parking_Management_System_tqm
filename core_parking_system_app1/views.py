@@ -14,10 +14,8 @@ from . import sqc_tools
 # ==========================================
 
 def login_view(request):
-    """Strictly authenticates registered operators and admins with mandatory credentials."""
-    if request.user.is_authenticated:
-        return redirect('dashboard')
-
+    """Strictly authenticates registered operators and admins with mandatory credentials.
+    Supports seamless account switching between Admin and Operator."""
     if request.method == 'POST':
         u_name = request.POST.get('username', '').strip()
         p_word = request.POST.get('password', '').strip()
@@ -29,6 +27,10 @@ def login_view(request):
         user = authenticate(request, username=u_name, password=p_word)
         if user is not None:
             if user.is_active:
+                # If a different account was previously active, terminate that session first
+                if request.user.is_authenticated and request.user.id != user.id:
+                    logout(request)
+
                 login(request, user)
                 role_label = "Supervisor / Admin" if (user.is_staff or user.is_superuser) else "Gate Operator"
                 messages.success(request, f"Welcome, {user.get_full_name() or user.username}! Authenticated as {role_label}.")
@@ -39,6 +41,9 @@ def login_view(request):
         else:
             messages.error(request, "Access Denied: Invalid credentials. Only registered users can enter.")
 
+        return render(request, 'login.html')
+
+    # GET request: Render login page (allows viewing credentials and switching accounts)
     return render(request, 'login.html')
 
 
