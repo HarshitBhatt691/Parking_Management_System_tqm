@@ -1,6 +1,7 @@
 import json
 import math
 from datetime import timedelta
+from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
@@ -15,41 +16,115 @@ from .rto_validator import validate_and_normalize_plate
 
 
 # ---------------------------------------------------------
+# RBAC SECURITY ENFORCEMENT & ROLE HELPERS
+# ---------------------------------------------------------
+def get_user_role(user):
+    """Identifies the operational stakeholder role of the user."""
+    if not user.is_authenticated:
+        return 'anonymous'
+    if user.is_superuser or user.username in ['admin', 'harshit008']:
+        return 'admin'
+    if user.username == 'manager' or (user.is_staff and not user.is_superuser):
+        return 'manager'
+    if user.username == 'guard':
+        return 'guard'
+    if user.username == 'customer':
+        return 'customer'
+    return 'operator'
+
+
+def require_role(allowed_roles):
+    """
+    Strict Role-Based Access Control (RBAC) decorator.
+    - If user is not authenticated, redirects to login launchpad with a warning.
+    - If user lacks authorized role, blocks entry with an Access Denied (403) alert
+      and redirects back to the user's authorized home workstation.
+    - Admins possess system-wide executive oversight across all workstations.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                messages.warning(
+                    request,
+                    "Authentication Required: Please enter your stakeholder credentials to access this workstation."
+                )
+                return redirect(f"/?next={request.path}")
+
+            user_role = get_user_role(request.user)
+            if user_role == 'admin' or user_role in allowed_roles:
+                return view_func(request, *args, **kwargs)
+
+            # Strict security denial: Guard trying to access Admin or Manager workstation, etc.
+            allowed_labels = ", ".join(r.upper() for r in allowed_roles)
+            messages.error(
+                request,
+                f"Access Denied (Security Policy): Your account '{request.user.username}' ({user_role.upper()} role) "
+                f"is not authorized to access this workstation. Required role: {allowed_labels}."
+            )
+
+            role_destinations = {
+                'admin': 'admin_console',
+                'manager': 'manager_console',
+                'operator': 'operator_terminal',
+                'guard': 'security_console',
+                'customer': 'customer_portal',
+            }
+            return redirect(role_destinations.get(user_role, 'landing_auth'))
+        return _wrapped
+    return decorator
+
+
+# ---------------------------------------------------------
 # 1. AUTH & PERSONA LAUNCHPAD (LANDING PAGE - /)
 # ---------------------------------------------------------
 def landing_auth(request):
     """
-    Main entry point of the software. Displays the interactive
-    stakeholder persona selector and credentials login.
+    Main authentication entry point. Displays interactive stakeholder
+    tiles which trigger credential authentication with zero security bypass.
     """
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
-    
-    # Live stats for landing page banner
+
     total_slots = ParkingSlot.objects.count() or 48
     active_count = Vehicle.objects.filter(status='Parked').count()
     free_slots = max(0, total_slots - active_count)
     ev_active_count = EVChargingSession.objects.filter(status='Charging').count()
 
+    selected_role = request.GET.get('role', '')
+    next_url = request.GET.get('next', '')
+
     if request.method == 'POST' and 'login_action' in request.POST:
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
+        next_target = request.POST.get('next', '').strip()
+
+        # Switch user cleanly if already signed in as someone else
+        if request.user.is_authenticated and request.user.username != username:
+            logout(request)
+
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            messages.success(request, f"Welcome back, {user.first_name or user.username}!")
-            # Route to appropriate workstation based on role
-            if user.is_superuser or user.username == 'admin':
-                return redirect('admin_console')
-            elif user.username == 'manager':
-                return redirect('manager_console')
-            elif user.username == 'guard':
-                return redirect('security_console')
-            elif user.username == 'customer':
-                return redirect('customer_portal')
-            else:
-                return redirect('operator_terminal')
+            user_role = get_user_role(user)
+            messages.success(request, f"Authenticated successfully as {user.first_name or user.username} ({user_role.upper()} Workstation).")
+
+            if next_target and next_target != '/' and not next_target.startswith('/login'):
+                return redirect(next_target)
+
+            role_destinations = {
+                'admin': 'admin_console',
+                'manager': 'manager_console',
+                'operator': 'operator_terminal',
+                'guard': 'security_console',
+                'customer': 'customer_portal',
+            }
+            return redirect(role_destinations.get(user_role, 'operator_terminal'))
         else:
-            messages.error(request, "Invalid username or password. Please verify credentials or use 1-Click Quick Access.")
+            messages.error(
+                request,
+                f"Authentication Failed: Invalid password for account '{username}'. Please enter valid credentials (demo key: {username}123)."
+            )
+            selected_role = username
 
     context = {
         'settings': settings,
@@ -57,67 +132,30 @@ def landing_auth(request):
         'active_count': active_count,
         'free_slots': free_slots,
         'ev_active_count': ev_active_count,
+        'selected_role': selected_role,
+        'next_url': next_url,
     }
     return render(request, 'landing_auth.html', context)
 
 
 def quick_persona_login(request, persona):
     """
-    1-Click Quick Test Login for evaluating stakeholders instantly.
-    Supported: 'admin', 'manager', 'operator', 'guard', 'customer'.
+    Eliminates security bypass: redirects user to the authentication launchpad
+    with the requested role modal triggered, requiring real password entry.
     """
-    user_mapping = {
-        'admin': 'admin',
-        'manager': 'manager',
-        'operator': 'operator',
-        'guard': 'guard',
-        'customer': 'customer',
-        'harshit008': 'harshit008',
-    }
-
-    username = user_mapping.get(persona.lower())
-    if not username:
-        messages.error(request, "Invalid persona requested.")
-        return redirect('landing_auth')
-
-    user = User.objects.filter(username=username).first()
-    if not user:
-        # Auto-create if somehow missing
-        is_staff = (persona in ['admin', 'manager', 'harshit008'])
-        is_super = (persona in ['admin', 'harshit008'])
-        user = User.objects.create_user(
-            username=username,
-            password=f"{username}123",
-            first_name=f"{persona.capitalize()} User",
-            is_staff=is_staff,
-            is_superuser=is_super
-        )
-
-    login(request, user)
-    request.session['stakeholder_role'] = persona
-
-    route_destinations = {
-        'admin': 'admin_console',
-        'manager': 'manager_console',
-        'operator': 'operator_terminal',
-        'guard': 'security_console',
-        'customer': 'customer_portal',
-        'harshit008': 'operator_terminal',
-    }
-    dest = route_destinations.get(persona, 'operator_terminal')
-    messages.success(request, f"Signed in as {user.first_name} ({persona.upper()} Role).")
-    return redirect(dest)
+    return redirect(f"/?role={persona.lower()}")
 
 
 def logout_view(request):
     logout(request)
-    messages.info(request, "You have been logged out of the terminal.")
+    messages.info(request, "You have been signed out. Enter credentials to access a workstation.")
     return redirect('landing_auth')
 
 
 # ---------------------------------------------------------
 # 2. OPERATOR / CASHIER WORKSTATION (/operator/)
 # ---------------------------------------------------------
+@require_role(['operator'])
 def operator_terminal(request):
     """
     Primary operational dashboard for gate operator and cashiers.
@@ -157,6 +195,7 @@ def operator_terminal(request):
 dashboard = operator_terminal
 
 
+@require_role(['operator'])
 def add_vehicle(request):
     """
     Handle vehicle check-in with Poka-Yoke RTO plate validation
@@ -190,11 +229,9 @@ def add_vehicle(request):
             vehicle.status = 'Parked'
             vehicle.save()
 
-            # Mark slot as occupied
             assigned_slot.is_occupied = True
             assigned_slot.save()
 
-            # Initialize EV Charging Session if EV bay / charging requested
             if vehicle.is_ev and (vehicle.ev_charging_requested or assigned_slot.is_ev_bay):
                 EVChargingSession.objects.create(
                     vehicle=vehicle,
@@ -212,7 +249,6 @@ def add_vehicle(request):
             )
             return redirect('operator_terminal')
         else:
-            # Poka-Yoke validation errors caught
             for field, errors in form.errors.items():
                 for err in errors:
                     messages.error(request, f"{err}")
@@ -221,6 +257,7 @@ def add_vehicle(request):
     return redirect('operator_terminal')
 
 
+@require_role(['operator'])
 def edit_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     if request.method == 'POST':
@@ -234,6 +271,7 @@ def edit_vehicle(request, vehicle_id):
     return render(request, 'edit_vehicle.html', {'form': form, 'vehicle': vehicle})
 
 
+@require_role(['operator'])
 def delete_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     plate = vehicle.license_plate
@@ -245,6 +283,7 @@ def delete_vehicle(request, vehicle_id):
     return redirect('operator_terminal')
 
 
+@require_role(['operator'])
 def exit_vehicle(request, vehicle_id):
     """
     Executes vehicle checkout, releases the multi-floor slot,
@@ -254,7 +293,6 @@ def exit_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, id=vehicle_id, status='Parked')
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
 
-    # Compute fee with configured parameters
     fee = vehicle.calculate_fee(
         rate_per_hour=float(settings.hourly_rate),
         daily_max_cap=float(settings.daily_max_rate),
@@ -273,6 +311,7 @@ def exit_vehicle(request, vehicle_id):
 def receipt_view(request, vehicle_id):
     """
     Renders commercial 80mm thermal-style POS invoice / e-receipt.
+    Accessible to operator, admin, or customer.
     """
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
@@ -293,7 +332,7 @@ def receipt_view(request, vehicle_id):
 # ---------------------------------------------------------
 def customer_portal(request):
     """
-    Customer driver self-service interface:
+    Customer driver self-service interface (publicly accessible):
     - 'Find My Car' search by plate
     - Floor Vacancy Explorer
     - Live EV battery status and power meter
@@ -305,9 +344,7 @@ def customer_portal(request):
     ev_session = None
 
     if query:
-        # Normalize search input to support relaxed queries like uk04ak5521
         clean_query = query.replace("-", "").replace(" ", "").upper()
-        # Search active parked vehicles first
         vehicles = Vehicle.objects.filter(status='Parked')
         matched = [v for v in vehicles if v.license_plate.replace("-", "").replace(" ", "").upper() == clean_query]
 
@@ -315,7 +352,6 @@ def customer_portal(request):
             searched_vehicle = matched[0]
             ev_session = getattr(searched_vehicle, 'ev_session', None)
         else:
-            # Check recently exited
             exited_matched = [v for v in Vehicle.objects.filter(status='Exited') if v.license_plate.replace("-", "").replace(" ", "").upper() == clean_query]
             if exited_matched:
                 searched_vehicle = exited_matched[0]
@@ -340,6 +376,7 @@ def customer_portal(request):
 # ---------------------------------------------------------
 # 4. SECURITY GUARD CONSOLE (/security/)
 # ---------------------------------------------------------
+@require_role(['guard'])
 def security_console(request):
     """
     Dedicated workstation for on-duty security guards:
@@ -349,12 +386,10 @@ def security_console(request):
     """
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
     incidents = SecurityIncident.objects.all()[:15]
-    
-    # Barrier states stored in session
+
     barrier_entry = request.session.get('barrier_entry', 'CLOSED')
     barrier_exit = request.session.get('barrier_exit', 'CLOSED')
 
-    # Guard Plate Lookup
     plate_lookup = request.GET.get('plate_lookup', '').strip()
     lookup_result = None
     if plate_lookup:
@@ -391,6 +426,7 @@ def security_console(request):
     return render(request, 'security_console.html', context)
 
 
+@require_role(['guard'])
 def security_resolve_incident(request, incident_id):
     inc = get_object_or_404(SecurityIncident, id=incident_id)
     inc.is_resolved = True
@@ -399,6 +435,7 @@ def security_resolve_incident(request, incident_id):
     return redirect('security_console')
 
 
+@require_role(['guard'])
 def security_toggle_barrier(request, barrier_type):
     key = f'barrier_{barrier_type}'
     current = request.session.get(key, 'CLOSED')
@@ -411,6 +448,7 @@ def security_toggle_barrier(request, barrier_type):
 # ---------------------------------------------------------
 # 5. OPERATIONS MANAGER CONSOLE (/manager/)
 # ---------------------------------------------------------
+@require_role(['manager'])
 def manager_console(request):
     """
     Executive dashboard for Operations Managers:
@@ -435,13 +473,11 @@ def manager_console(request):
     occupied_count = active_vehicles.count()
     overall_occupancy = int((occupied_count / total_slots) * 100) if total_slots else 0
 
-    # Revenue Analytics
     exited_vehicles = Vehicle.objects.filter(status='Exited')
     gross_parking_rev = exited_vehicles.aggregate(Sum('parking_fee'))['parking_fee__sum'] or 0.00
     gross_ev_rev = exited_vehicles.aggregate(Sum('ev_charging_fee'))['ev_charging_fee__sum'] or 0.00
     total_gross_rev = gross_parking_rev + gross_ev_rev
 
-    # EV Power Telemetry
     total_ev_energy = EVChargingSession.objects.aggregate(Sum('energy_kwh'))['energy_kwh__sum'] or 0.00
     active_ev_chargers = EVChargingSession.objects.filter(status='Charging').count()
 
@@ -467,6 +503,7 @@ def manager_console(request):
 # ---------------------------------------------------------
 # 6. ADMIN / OWNER CONSOLE (/admin-console/)
 # ---------------------------------------------------------
+@require_role(['admin'])
 def admin_console(request):
     """
     System administrator & owner portal:
@@ -495,6 +532,7 @@ def admin_console(request):
 # ---------------------------------------------------------
 # 7. PARKING HISTORY & AUDIT LOGS (/history/)
 # ---------------------------------------------------------
+@require_role(['admin', 'manager', 'operator'])
 def parking_history(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', 'all')
@@ -530,6 +568,7 @@ def parking_history(request):
 # ---------------------------------------------------------
 # 8. PROFILE SETTINGS (/profile/)
 # ---------------------------------------------------------
+@require_role(['admin', 'manager'])
 def profile_settings(request):
     settings, _ = ProfileSettings.objects.get_or_create(id=1)
     if request.method == 'POST':
@@ -560,12 +599,9 @@ def api_validate_plate(request):
     })
 
 
+@require_role(['admin'])
 def api_reset_seed(request):
     """Admin tool to re-seed demo data."""
-    if not request.user.is_superuser and request.user.username != 'admin':
-        messages.error(request, "Permission denied. Admin privileges required.")
-        return redirect('landing_auth')
-
     from seed_multi_floor import seed
     seed()
     messages.success(request, "System database successfully re-seeded with commercial demo data!")

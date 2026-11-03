@@ -1,23 +1,51 @@
 {% extends 'base.html' %}
 
-{% block title %}Authentication & Stakeholder Launchpad | ParkSmart Pro Enterprise{% endblock %}
+{% block title %}Stakeholder Authentication & Launchpad | ParkSmart Pro Enterprise{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center pt-2 pb-5">
     <!-- Hero Header -->
-    <div class="col-12 text-center mb-5">
+    <div class="col-12 text-center mb-4">
         <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 mb-3 fw-semibold small">
-            <span class="pulse-indicator"></span> Enterprise Parking Infrastructure & EV Automation
+            <span class="pulse-indicator"></span> Enterprise Role-Based Access Control (RBAC)
         </div>
         <h1 class="display-5 fw-extrabold tracking-tight mb-2">
             Welcome to <span class="text-primary">ParkSmart Pro</span>
         </h1>
         <p class="lead text-muted mx-auto" style="max-width: 760px;">
-            Select your stakeholder workstation below to enter the system, or sign in with your corporate enterprise credentials.
+            Select your stakeholder workstation below and authenticate with your registered credentials.
         </p>
 
+        <!-- Active Session Banner (If currently logged in) -->
+        {% if request.user.is_authenticated %}
+            <div class="alert alert-info card-custom border-0 shadow-sm mx-auto my-3 p-3 text-start d-flex flex-wrap justify-content-between align-items-center gap-2" style="max-width: 820px;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-person-check-fill fs-4 text-primary"></i>
+                    <div>
+                        <strong>Active Session:</strong> You are currently signed in as 
+                        <span class="badge bg-primary font-monospace">{{ request.user.username }}</span> 
+                        ({{ current_role_name }}).
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    {% if is_admin %}
+                        <a href="{% url 'admin_console' %}" class="btn btn-sm btn-dark rounded-pill fw-bold px-3">Enter Admin Console</a>
+                    {% elif is_manager %}
+                        <a href="{% url 'manager_console' %}" class="btn btn-sm btn-success rounded-pill fw-bold px-3">Enter Manager Console</a>
+                    {% elif is_operator %}
+                        <a href="{% url 'operator_terminal' %}" class="btn btn-sm btn-primary rounded-pill fw-bold px-3">Enter Operator Terminal</a>
+                    {% elif is_guard %}
+                        <a href="{% url 'security_console' %}" class="btn btn-sm btn-warning text-dark rounded-pill fw-bold px-3">Enter Security Gate</a>
+                    {% else %}
+                        <a href="{% url 'customer_portal' %}" class="btn btn-sm btn-info text-dark rounded-pill fw-bold px-3">Enter Customer Portal</a>
+                    {% endif %}
+                    <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger rounded-pill px-3">Sign Out</a>
+                </div>
+            </div>
+        {% endif %}
+
         <!-- Live Facility Badges -->
-        <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+        <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
             <div class="card card-custom px-3 py-2 d-flex flex-row align-items-center gap-2">
                 <i class="bi bi-layers-fill text-primary fs-5"></i>
                 <div class="text-start">
@@ -42,18 +70,18 @@
             <div class="card card-custom px-3 py-2 d-flex flex-row align-items-center gap-2">
                 <i class="bi bi-shield-check text-info fs-5"></i>
                 <div class="text-start">
-                    <div class="text-muted small">Error Prevention</div>
-                    <div class="fw-bold">Poka-Yoke RTO Engine</div>
+                    <div class="text-muted small">Access Enforcement</div>
+                    <div class="fw-bold">Strict Role Isolation</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Stakeholder Workstation Portals (5 Grid Cards) -->
+    <!-- Stakeholder Workstation Tiles (5 Grid Cards) -->
     <div class="col-12 mb-5">
         <div class="text-center mb-4">
-            <h3 class="fw-bold"><i class="bi bi-people-fill text-primary me-2"></i>Select Your Role & Workstation</h3>
-            <p class="text-muted small">Click any stakeholder card below for 1-Click instant workstation launch</p>
+            <h3 class="fw-bold"><i class="bi bi-shield-lock text-primary me-2"></i>Select Workstation to Authenticate</h3>
+            <p class="text-muted small">Click any stakeholder card to open credential verification. Each portal requires authorized role authentication.</p>
         </div>
 
         <div class="row g-4 row-cols-1 row-cols-md-2 row-cols-xl-5">
@@ -67,15 +95,17 @@
                         <h5 class="fw-bold mb-1">Admin / Owner</h5>
                         <span class="badge bg-dark bg-opacity-75 mb-3">System Administration</span>
                         <p class="text-muted small flex-grow-1 text-start">
-                            Full executive control, staff account management, database backups, audit trail, and gross revenue reconciliation.
+                            Full executive control, staff account management, database diagnostics, and gross revenue reconciliation.
                         </p>
                         <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
-                            <span class="text-muted">User:</span> admin<br>
-                            <span class="text-muted">Pass:</span> admin123
+                            <span class="text-muted">Account:</span> admin<br>
+                            <span class="text-muted">Demo Pass:</span> admin123
                         </div>
-                        <a href="{% url 'quick_persona_login' 'admin' %}" class="btn btn-dark w-100 rounded-pill fw-semibold py-2">
-                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Admin
-                        </a>
+                        <button type="button" 
+                                class="btn btn-dark w-100 rounded-pill fw-semibold py-2"
+                                onclick="openAuthModal('admin', 'Admin / Owner Console', 'admin123', 'bg-dark', 'bi-person-fill-gear', 'Full facility administration and staff management')">
+                            <i class="bi bi-key-fill me-1"></i> Sign In as Admin
+                        </button>
                     </div>
                 </div>
             </div>
@@ -93,12 +123,14 @@
                             Multi-floor capacity heatmaps, hourly parking tariffs, EV charging kWh pricing, and revenue analytics.
                         </p>
                         <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
-                            <span class="text-muted">User:</span> manager<br>
-                            <span class="text-muted">Pass:</span> manager123
+                            <span class="text-muted">Account:</span> manager<br>
+                            <span class="text-muted">Demo Pass:</span> manager123
                         </div>
-                        <a href="{% url 'quick_persona_login' 'manager' %}" class="btn btn-success w-100 rounded-pill fw-semibold py-2">
-                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Manager
-                        </a>
+                        <button type="button" 
+                                class="btn btn-success w-100 rounded-pill fw-semibold py-2"
+                                onclick="openAuthModal('manager', 'Operations Manager Console', 'manager123', 'bg-success', 'bi-briefcase-fill', 'Floor management, tariff pricing, and commercial analytics')">
+                            <i class="bi bi-key-fill me-1"></i> Sign In as Manager
+                        </button>
                     </div>
                 </div>
             </div>
@@ -116,12 +148,14 @@
                             High-speed vehicle check-in with Poka-Yoke RTO verification, smart bay allocation, checkout & POS billing.
                         </p>
                         <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
-                            <span class="text-muted">User:</span> operator<br>
-                            <span class="text-muted">Pass:</span> operator123
+                            <span class="text-muted">Account:</span> operator<br>
+                            <span class="text-muted">Demo Pass:</span> operator123
                         </div>
-                        <a href="{% url 'quick_persona_login' 'operator' %}" class="btn btn-primary w-100 rounded-pill fw-semibold py-2">
-                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Terminal
-                        </a>
+                        <button type="button" 
+                                class="btn btn-primary w-100 rounded-pill fw-semibold py-2"
+                                onclick="openAuthModal('operator', 'Gate Operator Terminal', 'operator123', 'bg-primary', 'bi-display', 'Fast vehicle check-in, bay allocation, and billing checkout')">
+                            <i class="bi bi-key-fill me-1"></i> Sign In as Operator
+                        </button>
                     </div>
                 </div>
             </div>
@@ -139,12 +173,14 @@
                             Simulated ingress/egress barrier toggles, license plate scanner lookup, and security incident dispatch.
                         </p>
                         <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
-                            <span class="text-muted">User:</span> guard<br>
-                            <span class="text-muted">Pass:</span> guard123
+                            <span class="text-muted">Account:</span> guard<br>
+                            <span class="text-muted">Demo Pass:</span> guard123
                         </div>
-                        <a href="{% url 'quick_persona_login' 'guard' %}" class="btn btn-warning text-dark w-100 rounded-pill fw-semibold py-2">
-                            <i class="bi bi-box-arrow-in-right me-1"></i> Launch Guard
-                        </a>
+                        <button type="button" 
+                                class="btn btn-warning text-dark w-100 rounded-pill fw-semibold py-2"
+                                onclick="openAuthModal('guard', 'Security Guard Console', 'guard123', 'bg-warning', 'bi-shield-lock-fill', 'Barrier overrides, plate scanning, and security incidents')">
+                            <i class="bi bi-key-fill me-1"></i> Sign In as Guard
+                        </button>
                     </div>
                 </div>
             </div>
@@ -162,56 +198,163 @@
                             "Find My Car" locator, live floor vacancy explorer, real-time EV battery charging gauge, and e-receipt download.
                         </p>
                         <div class="bg-light p-2 rounded mb-3 text-start small font-monospace">
-                            <span class="text-muted">Access:</span> Public / Guest<br>
-                            <span class="text-muted">User:</span> customer
+                            <span class="text-muted">Access:</span> Public / Registered<br>
+                            <span class="text-muted">Demo Pass:</span> customer123
                         </div>
-                        <a href="{% url 'customer_portal' %}" class="btn btn-info text-dark w-100 rounded-pill fw-semibold py-2">
-                            <i class="bi bi-search me-1"></i> Open Portal
-                        </a>
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{% url 'customer_portal' %}" class="btn btn-outline-info text-dark w-100 rounded-pill fw-semibold py-1">
+                                <i class="bi bi-geo-alt me-1"></i> Public Guest Driver
+                            </a>
+                            <button type="button" 
+                                    class="btn btn-info text-dark w-100 rounded-pill fw-semibold py-1 small"
+                                    onclick="openAuthModal('customer', 'Driver Customer Account', 'customer123', 'bg-info', 'bi-person-circle', 'Driver account access and digital receipts')">
+                                <i class="bi bi-key-fill me-1"></i> Sign In as Customer
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Corporate Credential Sign-In Form -->
+    <!-- General Corporate Sign-In Form (Alternative Access) -->
     <div class="col-12 col-md-8 col-lg-5">
         <div class="card card-custom">
             <div class="card-body p-4 p-md-5">
                 <div class="d-flex align-items-center gap-2 mb-3">
-                    <i class="bi bi-key-fill text-primary fs-4"></i>
+                    <i class="bi bi-shield-check text-primary fs-4"></i>
                     <h5 class="fw-bold mb-0">Corporate Enterprise Sign-In</h5>
                 </div>
                 <p class="text-muted small mb-4">
-                    Enter your staff credentials to access your assigned workstation:
+                    Enter any valid staff username and password to authenticate into your workstation:
                 </p>
 
                 <form method="POST" action="{% url 'landing_auth' %}">
                     {% csrf_token %}
                     <input type="hidden" name="login_action" value="1">
+                    <input type="hidden" name="next" value="{{ next_url }}">
                     
                     <div class="mb-3">
-                        <label for="id_username" class="form-label small fw-semibold text-muted">Username</label>
+                        <label for="id_username_main" class="form-label small fw-semibold text-muted">Username / Staff ID</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-person"></i></span>
-                            <input type="text" name="username" id="id_username" class="form-control" placeholder="e.g. operator, manager, admin" required autofocus>
+                            <input type="text" name="username" id="id_username_main" class="form-control" placeholder="admin, manager, operator, guard" required>
                         </div>
                     </div>
 
                     <div class="mb-4">
-                        <label for="id_password" class="form-label small fw-semibold text-muted">Password</label>
+                        <label for="id_password_main" class="form-label small fw-semibold text-muted">Password</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                            <input type="password" name="password" id="id_password" class="form-control" placeholder="••••••••" required>
+                            <input type="password" name="password" id="id_password_main" class="form-control" placeholder="••••••••" required>
                         </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100 py-2 rounded-pill fw-bold">
-                        <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to Workstation
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Authenticate & Enter Workstation
                     </button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<!-- ========================================================= -->
+<!-- INTERACTIVE STAKEHOLDER AUTHENTICATION MODAL -->
+<!-- ========================================================= -->
+<div class="modal fade" id="stakeholderAuthModal" tabindex="-1" aria-labelledby="stakeholderAuthModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content card-custom">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="stat-icon-wrapper text-white" id="modalIconWrapper" style="width: 40px; height: 40px; font-size: 1.2rem;">
+                        <i class="bi bi-shield-lock-fill" id="modalIcon"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold" id="modalTitle">Authenticate Workstation</h5>
+                        <p class="text-muted small mb-0" id="modalSubtitle">Protected by Role-Based Access Control</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <form method="POST" action="{% url 'landing_auth' %}" id="modalLoginForm">
+                {% csrf_token %}
+                <input type="hidden" name="login_action" value="1">
+                <input type="hidden" name="next" value="{{ next_url }}">
+
+                <div class="modal-body pt-3">
+                    <div class="mb-3">
+                        <label for="modalUsername" class="form-label fw-bold small text-muted">Staff Account Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                            <input type="text" name="username" id="modalUsername" class="form-control font-monospace fw-bold" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modalPassword" class="form-label fw-bold small text-muted">Account Password <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                            <input type="password" name="password" id="modalPassword" class="form-control" placeholder="Enter password" required autofocus>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-secondary py-2 small font-monospace d-flex justify-content-between align-items-center mb-0">
+                        <span><i class="bi bi-info-circle me-1"></i> Registered Demo Key:</span>
+                        <strong id="modalDemoKey" class="text-primary">admin123</strong>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold" id="modalSubmitBtn">
+                        <i class="bi bi-check-circle-fill me-1"></i> Verify & Enter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openAuthModal(username, roleName, demoKey, badgeClass, iconClass, description) {
+        document.getElementById('modalUsername').value = username;
+        document.getElementById('modalPassword').value = '';
+        document.getElementById('modalTitle').innerText = roleName;
+        document.getElementById('modalSubtitle').innerText = description || 'Protected by Role-Based Access Control';
+        document.getElementById('modalDemoKey').innerText = demoKey;
+
+        const iconWrapper = document.getElementById('modalIconWrapper');
+        iconWrapper.className = `stat-icon-wrapper text-white ${badgeClass}`;
+
+        const iconElem = document.getElementById('modalIcon');
+        iconElem.className = `bi ${iconClass}`;
+
+        const modal = new bootstrap.Modal(document.getElementById('stakeholderAuthModal'));
+        modal.show();
+        setTimeout(() => document.getElementById('modalPassword')?.focus(), 400);
+    }
+
+    // Auto-open modal if ?role=... or ?login_as=... is specified in query parameters
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const role = urlParams.get('role') || '{{ selected_role }}';
+        if (role) {
+            const roleConfigs = {
+                'admin': ['admin', 'Admin / Owner Console', 'admin123', 'bg-dark', 'bi-person-fill-gear', 'Full facility administration and staff management'],
+                'manager': ['manager', 'Operations Manager Console', 'manager123', 'bg-success', 'bi-briefcase-fill', 'Floor management, tariff pricing, and commercial analytics'],
+                'operator': ['operator', 'Gate Operator Terminal', 'operator123', 'bg-primary', 'bi-display', 'Fast vehicle check-in, bay allocation, and billing checkout'],
+                'guard': ['guard', 'Security Guard Console', 'guard123', 'bg-warning', 'bi-shield-lock-fill', 'Barrier overrides, plate scanning, and security incidents'],
+                'customer': ['customer', 'Driver Customer Account', 'customer123', 'bg-info', 'bi-person-circle', 'Driver account access and digital receipts'],
+            };
+            const cfg = roleConfigs[role.toLowerCase()];
+            if (cfg) {
+                openAuthModal(...cfg);
+            }
+        }
+    });
+</script>
 {% endblock %}
