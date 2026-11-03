@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Floor, ParkingSlot, Vehicle, EVChargingSession, SecurityIncident, ProfileSettings, Defect
+from .models import Floor, ParkingSlot, Vehicle, EVChargingSession, SecurityIncident, ProfileSettings
 
 
 @admin.register(Floor)
@@ -43,9 +43,3 @@ class SecurityIncidentAdmin(admin.ModelAdmin):
 @admin.register(ProfileSettings)
 class ProfileSettingsAdmin(admin.ModelAdmin):
     list_display = ('facility_name', 'operator_name', 'hourly_rate', 'daily_max_rate', 'ev_rate_per_kwh', 'total_capacity')
-
-
-@admin.register(Defect)
-class DefectAdmin(admin.ModelAdmin):
-    list_display = ('defect_type', 'frequency')
-    search_fields = ('defect_type',)
